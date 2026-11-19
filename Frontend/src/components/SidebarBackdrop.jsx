@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { isLite, isPaused } from "../ui/perf.js";
 
 /**
  * Fond animé de la barre latérale :
@@ -20,6 +21,22 @@ export default function SidebarBackdrop() {
     if (!wrap || !canvas || !host) return undefined;
     const ctx = canvas.getContext("2d");
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const lite = isLite();
+
+    // Sprites de lueur pré-rendus (évite un dégradé radial par particule et par image)
+    const makeSprite = (hue) => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 32;
+      const g = c.getContext("2d");
+      const grd = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+      grd.addColorStop(0, `hsla(${hue},100%,78%,0.75)`);
+      grd.addColorStop(0.35, `hsla(${hue},100%,65%,0.28)`);
+      grd.addColorStop(1, `hsla(${hue},100%,60%,0)`);
+      g.fillStyle = grd;
+      g.fillRect(0, 0, 32, 32);
+      return c;
+    };
+    const SPRITES = { blue: makeSprite(215), teal: makeSprite(172) };
 
     let W = 0, H = 0, dpr = 1;
     let stars = [], flow = [], comets = [];
@@ -29,20 +46,20 @@ export default function SidebarBackdrop() {
     function resize() {
       const r = host.getBoundingClientRect();
       W = Math.max(1, r.width); H = Math.max(1, r.height);
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, lite ? 1 : 1.5);
       canvas.width = W * dpr; canvas.height = H * dpr;
       canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      stars = Array.from({ length: Math.round((W * H) / 2200) }, () => ({
+      stars = Array.from({ length: Math.round((W * H) / 3000) }, () => ({
         x: rand(0, W), y: rand(0, H), r: rand(0.3, 1.3), t: rand(0, Math.PI * 2), s: rand(0.01, 0.04),
       }));
-      flow = Array.from({ length: 55 }, () => newFlow(true));
+      flow = lite ? [] : Array.from({ length: 42 }, () => newFlow(true));
     }
     function newFlow(anywhere) {
       return {
         x: rand(0, W), y: anywhere ? rand(0, H) : H + rand(0, 40),
         vy: -rand(0.25, 0.9), vx: 0, life: 0, r: rand(0.6, 1.8),
-        hue: Math.random() < 0.7 ? rand(205, 230) : rand(160, 180),
+        sprite: Math.random() < 0.7 ? "blue" : "teal",
       };
     }
 
@@ -79,11 +96,8 @@ export default function SidebarBackdrop() {
         p.y += p.vy;
         p.life += 1;
         if (p.y < -20 || p.x < -20 || p.x > W + 20) flow[i] = newFlow(false);
-        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 5);
-        glow.addColorStop(0, `hsla(${p.hue},100%,75%,0.6)`);
-        glow.addColorStop(1, `hsla(${p.hue},100%,60%,0)`);
-        ctx.fillStyle = glow;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 5, 0, Math.PI * 2); ctx.fill();
+        const sz = p.r * 10;
+        ctx.drawImage(SPRITES[p.sprite], p.x - sz / 2, p.y - sz / 2, sz, sz);
       }
 
       // Étoiles filantes
@@ -114,7 +128,7 @@ export default function SidebarBackdrop() {
     let raf = 0, last = 0;
     const loop = (t) => {
       raf = requestAnimationFrame(loop);
-      if (document.hidden || t - last < 33) return;
+      if (isPaused() || t - last < 33) return;
       last = t;
       frame();
     };
@@ -129,7 +143,7 @@ export default function SidebarBackdrop() {
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(host);
-    if (reduce) { frame(); return () => ro.disconnect(); }
+    if (reduce || lite) { frame(); return () => ro.disconnect(); }
     host.addEventListener("pointermove", onMove, { passive: true });
     host.addEventListener("pointerleave", onLeave);
     raf = requestAnimationFrame(loop);

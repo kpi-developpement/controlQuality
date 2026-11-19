@@ -7,6 +7,7 @@ import './styles/luxe.css';
 import './styles/polish.css';
 import api from './api.js';
 import { initRipple, attachNetworkProgress, initCardGlow } from './ui/motion.js';
+import { initPerf } from './ui/perf.js';
 
 // Applique le thème mémorisé avant le premier rendu (évite le flash clair → sombre)
 try {
@@ -14,6 +15,7 @@ try {
   if (t === 'dark' || t === 'light') document.documentElement.classList.add(t);
 } catch { /* ignore */ }
 
+initPerf();
 initRipple();
 initCardGlow();
 attachNetworkProgress(api);

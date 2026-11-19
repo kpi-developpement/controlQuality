@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import Ico from "../ui/Ico.jsx";
 import api from "../api";
 import MultiSelect from "../components/MultiSelect.jsx";
 import PeriodFilter from "../components/PeriodFilter.jsx";
@@ -62,8 +63,7 @@ export default function AgentPerformance({ role }) {
     exportToXlsx(`Performances_agents_${localDate()}.xlsx`, byAgent.map((a) => ({ Agent: a.name, Cellule: a.cell, Evaluations: a.count, "Conformité (%)": Number(a.avg.toFixed(1)), Contestées: a.contested, "Début sélection": periodRange(period).dateFrom || "Toutes dates", "Fin sélection": periodRange(period).dateTo || "Toutes dates" })));
   }
   return <div className="page">
-    <h2>Performance agents</h2>
-    <p style={{ color: "var(--muted)" }}>Suivi par agent, cellule, jour, semaine ou mois. Les périodes portent sur la date de création des évaluations. Le périmètre reste celui de vos évaluations accessibles.</p>
+    <div className="page-head"><div><div className="page-title"><Ico n="trend" /> Performance agents</div><div>Suivi par agent, cellule, jour, semaine ou mois. Les périodes portent sur la date de création des évaluations. Le périmètre reste celui de vos évaluations accessibles.</div></div></div>
     <div className="card filters-card">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12, marginBottom: 12 }}>
         <label>Cellule<Select className="input" value={cell} onChange={(e) => { setCell(e.target.value); setPilotIds([]); }}><option value="">Toutes les cellules</option>{cells.map((c) => <option key={c}>{c}</option>)}</Select></label>

@@ -4,7 +4,6 @@ import Card from "./components/Card.jsx";
 import Pager from "./components/Pager.jsx";
 import { exportToXlsx } from "./components/exportXlsx.js";
 import { useToast } from "../../toast/ToastProvider.jsx";
-import MultiSelect from "../../components/MultiSelect.jsx";
 import { VISIBILITY_SCOPES, EDIT_SCOPES, ROLE_LABELS } from "../../utils/evalMeta.js";
 import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
@@ -86,7 +85,8 @@ export default function UsersStructuresView() {
   const [email, setEmail] = useState("");
   const [password, setPasswordValue] = useState("");
   const [newRole, setNewRole] = useState("cq");
-  const [cellSelection, setCellSelection] = useState("");
+  // Cellules : la 1re sélectionnée = cellule principale, les suivantes = cellules supplémentaires autorisées
+  const [cellSelection, setCellSelection] = useState([]);
   // Contrat Orange : périmètre du nouveau profil
   const [newProject, setNewProject] = useState("");
   const [newContract, setNewContract] = useState("");
@@ -185,7 +185,8 @@ export default function UsersStructuresView() {
       email: email.trim(),
       password: password.trim(),
       role: newRole,
-      cell: cellSelection || "",
+      cell: cellSelection[0] || "",
+      extraCells: cellSelection.slice(1),
       project: newProject,
       contract: newContract,
       visibilityScope: newVisibility,
@@ -200,7 +201,7 @@ export default function UsersStructuresView() {
     setEmail("");
     setPasswordValue("");
     setNewRole("cq");
-    setCellSelection("");
+    setCellSelection([]);
     setNewProject("");
     setNewContract("");
     setNewVisibility("");
@@ -573,8 +574,8 @@ export default function UsersStructuresView() {
                 <option value="management">Management (historique)</option>
                 <option value="supervision">Supervision (historique)</option>
               </Select>
-              <Select className="input" value={cellSelection} onChange={(e) => setCellSelection(e.target.value)}>
-                <option value="">Aucune cellule</option>
+              <Select className="input" multiple placeholder="Aucune cellule" title="Cellules (la première = cellule principale)"
+                value={cellSelection} onChange={(e) => setCellSelection(e.target.selectedOptions.map((o) => o.value))}>
                 {cells.map((c) => (
                   <option key={c._id} value={c.name}>
                     {c.name} {c.active === false ? "(inactive)" : ""}
@@ -776,8 +777,12 @@ export default function UsersStructuresView() {
                 <option value="management">Management (historique)</option>
                 <option value="supervision">Supervision (historique)</option>
                   </Select>
-                  <Select className="input" value={safeStr(editing.cell || "")} onChange={(e) => setEditing({ ...editing, cell: e.target.value })}>
-                    <option value="">Aucune cellule</option>
+                  <Select className="input" multiple placeholder="Aucune cellule" title="Cellules (la première = cellule principale)"
+                    value={[editing.cell, ...(Array.isArray(editing.extraCells) ? editing.extraCells : [])].filter(Boolean)}
+                    onChange={(e) => {
+                      const sel = e.target.selectedOptions.map((o) => o.value);
+                      setEditing({ ...editing, cell: sel[0] || "", extraCells: sel.slice(1) });
+                    }}>
                     {cells.map((c) => (
                       <option key={c._id} value={c.name}>
                         {c.name}
@@ -805,14 +810,8 @@ export default function UsersStructuresView() {
                   <Select className="input" value={editing.editScope || ""} onChange={(e) => setEditing({ ...editing, editScope: e.target.value })} title="Périmètre de modification">
                     {EDIT_SCOPES.map((o) => <option key={o.value} value={o.value}>Modification : {o.label}</option>)}
                   </Select>
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <div className="label" style={{ marginBottom: 4 }}>Cellules supplémentaires autorisées (autorisation spécifique)</div>
-                    <MultiSelect
-                      options={cells.filter((c) => c.name !== editing.cell).map((c) => ({ value: c.name, label: c.name }))}
-                      value={Array.isArray(editing.extraCells) ? editing.extraCells : []}
-                      onChange={(v) => setEditing({ ...editing, extraCells: v })}
-                      placeholder="Aucune"
-                    />
+                  <div style={{ gridColumn: "1 / -1", fontSize: "0.78rem", color: "var(--muted)", marginTop: -2 }}>
+                    Cellules : la première sélectionnée est la cellule principale, les suivantes sont des cellules supplémentaires autorisées.
                   </div>
 
                   <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>

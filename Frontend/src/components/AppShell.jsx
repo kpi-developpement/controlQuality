@@ -5,6 +5,8 @@ import NotificationsBell from "./NotificationsBell.jsx";
 import ProfileModal from "./ProfileModal.jsx";
 import LuxeBackground from "./LuxeBackground.jsx";
 import SidebarBackdrop from "./SidebarBackdrop.jsx";
+import { isLite, setPerfPref, onPerfChange } from "../ui/perf.js";
+import { FiZap } from "react-icons/fi";
 import api from "../api";
 import { downloadChatDocument } from "../utils/chatDocuments.mjs";
 import Ico from "../ui/Ico.jsx";
@@ -229,6 +231,8 @@ export default function AppShell({ user, onLogout, navSections, children }) {
     try { return localStorage.getItem("kcq:sidebar") === "collapsed"; } catch { return false; }
   });
   const [profileOpen, setProfileOpen] = useState(false);
+  const [lite, setLite] = useState(() => isLite());
+  useEffect(() => onPerfChange(setLite), []);
 
   // Inline search
   const [searchQuery, setSearchQuery] = useState("");
@@ -328,9 +332,9 @@ export default function AppShell({ user, onLogout, navSections, children }) {
 
   return (
     <div className={collapsed ? "shell shell--collapsed" : "shell"}>
-      <LuxeBackground />
+      <LuxeBackground key={lite ? "bg-lite" : "bg-full"} />
       <aside className="sidebar">
-        <SidebarBackdrop />
+        <SidebarBackdrop key={lite ? "sb-lite" : "sb-full"} />
         <div className="sidebar__top">
           <div className="brand">
             <div className="brand__mark" aria-hidden="true">
@@ -439,6 +443,15 @@ export default function AppShell({ user, onLogout, navSections, children }) {
             </div>
           </div>
           <div className="topbar__actions">
+            <button
+              className={lite ? "iconbtn perf-toggle is-on" : "iconbtn perf-toggle"}
+              onClick={() => setPerfPref(lite ? "full" : "lite")}
+              title={lite ? "Mode performance activé (effets réduits) — cliquer pour les effets complets" : "Activer le mode performance (PC lents)"}
+              aria-pressed={lite}
+              aria-label="Mode performance"
+            >
+              <FiZap size={17} />
+            </button>
             <ThemeToggle />
             <NotificationsBell />
           </div>

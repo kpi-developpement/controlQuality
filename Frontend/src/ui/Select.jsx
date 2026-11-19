@@ -61,9 +61,10 @@ export default function Select({
   }, [options, query]);
 
   const selectedOpt = !multiple ? options.find((o) => selectedSet.has(o.value)) : null;
-  const display = multiple
-    ? options.filter((o) => selectedSet.has(o.value)).map((o) => o.label).join(", ")
-    : selectedOpt?.label ?? "";
+  const multiLabels = multiple
+    ? (Array.isArray(current) ? current : []).map((v) => options.find((o) => o.value === String(v))?.label).filter(Boolean)
+    : [];
+  const display = multiple ? multiLabels.join(", ") : selectedOpt?.label ?? "";
   const isPlaceholder = multiple ? selectedSet.size === 0 : !selectedOpt || selectedOpt.value === "";
 
   const place = useCallback(() => {
@@ -129,7 +130,8 @@ export default function Select({
       id,
       multiple: !!multiple,
       options: options.map((o) => ({ value: o.value, text: o.label, selected: values.includes(o.value) })),
-      selectedOptions: options.filter((o) => values.includes(o.value)).map((o) => ({ value: o.value, text: o.label })),
+      // Ordre de sélection conservé (le 1er choisi reste en tête)
+      selectedOptions: values.map((v) => options.find((o) => o.value === v)).filter(Boolean).map((o) => ({ value: o.value, text: o.label })),
     };
     onChange({ target, currentTarget: target, preventDefault() {}, stopPropagation() {}, persist() {} });
   }
@@ -218,6 +220,7 @@ export default function Select({
               >
                 {multiple && <span className={`kselect__box${sel ? " is-on" : ""}`}>{sel && <FiCheck />}</span>}
                 <span className="kselect__label">{o.label || " "}</span>
+                {multiple && sel && multiLabels.length > 1 && String((Array.isArray(current) ? current : [])[0]) === o.value && <span className="kselect__tag">Principale</span>}
                 {!multiple && sel && <FiCheck className="kselect__tick" />}
               </div>
             </React.Fragment>
@@ -249,7 +252,11 @@ export default function Select({
         onKeyDown={onKeyDown}
         {...rest}
       >
-        <span className="kselect__value">{display || placeholder || " "}</span>
+        <span className="kselect__value">
+          {multiple && multiLabels.length > 1
+            ? <>{multiLabels[0]} <span className="kselect__more">+{multiLabels.length - 1}</span></>
+            : display || placeholder || " "}
+        </span>
         <FiChevronDown className="kselect__chev" />
       </button>
       {menu}

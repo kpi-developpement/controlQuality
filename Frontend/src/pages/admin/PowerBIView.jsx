@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Ico from "../../ui/Ico.jsx";
 import api from "../../api";
 import Select from "../../ui/Select.jsx";
 const empty = { title: "", url: "", pageName: "" };
@@ -39,8 +40,7 @@ export default function PowerBIView() {
     finally { setBusy(false); }
   }
   return <div className="page">
-    <h2>Power BI</h2>
-    <p style={{ color: "var(--muted)" }}>Ajoutez vos rapports et choisissez la page à afficher dans l’application. Accès réservé aux administrateurs.</p>
+    <div className="page-head"><div><div className="page-title"><Ico n="chart" /> Power BI</div><div>Ajoutez vos rapports et choisissez la page à afficher dans l’application. Accès réservé aux administrateurs.</div></div></div>
     {error && <p role="alert" style={{ color: "var(--danger)" }}>{error}</p>}
     <form onSubmit={save} className="card" style={{ padding: 16, marginBottom: 16 }}>
       <h3>{editId ? "Modifier le rapport" : "Ajouter un rapport"}</h3>

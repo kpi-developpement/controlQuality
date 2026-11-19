@@ -110,6 +110,7 @@ export function initCardGlow() {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
+        if (document.documentElement.classList.contains("perf-lite")) return;
         const card = last.target.closest?.(".card");
         if (!card) return;
         const r = card.getBoundingClientRect();

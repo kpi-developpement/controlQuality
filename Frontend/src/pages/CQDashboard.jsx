@@ -3,6 +3,7 @@ import CQEvaluations from "./cq/CQEvaluations.jsx";
 import CQCoaching from "./cq/CQCoaching.jsx";
 import CQSettings from "./cq/CQSettings.jsx";
 import GridsView from "./admin/GridsView.jsx";
+import Ico from "../ui/Ico.jsx";
 import TrainingPage from "./TrainingPage.jsx";
 import NewEvaluationPage from "./shared/NewEvaluationPage.jsx";
 import PickingListPage from "./shared/PickingListPage.jsx";
@@ -39,8 +40,8 @@ export default function CQDashboard({ forcedView, onViewChange, editScoreId }) {
   // CQ & Formateur : paramètrent, ajoutent et modifient les grilles directement
   if (view === "grids") return (
     <div className="page">
-      <div style={{ marginBottom: 18 }}>
-        <div className="page-title">Grilles d'évaluation</div>
+      <div className="page-head">
+        <div className="page-title"><Ico n="grid" /> Grilles d'évaluation</div>
         <div>Créez, paramétrez et modifiez les grilles. Les changements s'appliquent immédiatement.</div>
       </div>
       <GridsView />

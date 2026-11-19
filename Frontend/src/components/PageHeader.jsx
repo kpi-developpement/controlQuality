@@ -1,13 +1,14 @@
 import React from "react";
 
+/** En-tête de page commun : même titre (dégradé, animation) que le reste de l'application. */
 export default function PageHeader({ title, subtitle, right }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+    <div className="page-head">
       <div>
-        <div style={{ fontSize: "1.45rem", fontWeight: 800, letterSpacing: "-0.035em", color: "var(--text)", lineHeight: 1.2 }}>{title}</div>
-        {subtitle ? <div style={{ marginTop: 4, color: "var(--muted)", fontSize: "0.875rem" }}>{subtitle}</div> : null}
+        <div className="page-title">{title}</div>
+        {subtitle ? <div>{subtitle}</div> : null}
       </div>
-      {right ? <div>{right}</div> : null}
+      {right ? <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>{right}</div> : null}
     </div>
   );
 }

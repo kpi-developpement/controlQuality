@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { isLite, isPaused } from "../ui/perf.js";
 
 /**
  * Fond interactif « luxe » :
@@ -29,11 +30,11 @@ export default function LuxeBackground({ variant = "app" }) {
     function resize() {
       const b = box();
       W = Math.max(1, b.width); H = Math.max(1, b.height);
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = W * dpr; canvas.height = H * dpr;
       canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.round(Math.min(70, Math.max(28, (W * H) / 26000)));
+      const count = Math.round(Math.min(45, Math.max(20, (W * H) / 34000)));
       particles = Array.from({ length: count }, () => ({
         x: Math.random() * W,
         y: Math.random() * H,
@@ -92,7 +93,7 @@ export default function LuxeBackground({ variant = "app" }) {
     let raf = 0, lastT = 0;
     function frame(t) {
       raf = requestAnimationFrame(frame);
-      if (document.hidden || t - lastT < 30) return; // ~30 fps suffit
+      if (isPaused() || t - lastT < 33) return; // ~30 fps, rien si fenêtre inactive
       lastT = t;
       mx += (tx - mx) * 0.08; my += (ty - my) * 0.08;
       el.style.setProperty("--mx", `${mx.toFixed(1)}px`);
@@ -112,7 +113,7 @@ export default function LuxeBackground({ variant = "app" }) {
 
     resize();
     window.addEventListener("resize", resize);
-    if (reduce) { draw(); return () => window.removeEventListener("resize", resize); }
+    if (reduce || isLite()) { draw(); return () => window.removeEventListener("resize", resize); }
     window.addEventListener("pointermove", onMove, { passive: true });
     document.documentElement.addEventListener("pointerleave", onLeave);
     raf = requestAnimationFrame(frame);
