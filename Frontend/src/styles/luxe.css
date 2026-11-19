@@ -1,0 +1,155 @@
+/* =====================================================================
+   COUCHE LUXE v4 — typographie, cartes, tableaux, survols
+   Importé après index.css (main.jsx)
+   ===================================================================== */
+:root{
+  --card-edge:linear-gradient(155deg,rgba(255,255,255,0.95) 0%,rgba(59,111,245,0.22) 38%,rgba(22,58,140,0.07) 70%,rgba(59,111,245,0.16) 100%);
+  --card-glow:rgba(59,111,245,0.09);
+  --card-sheen:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0) 38%);
+  --title-grad:linear-gradient(100deg,#0a1630 0%,#173b9c 55%,#2456e6 100%);
+}
+html.dark{
+  --card-edge:linear-gradient(155deg,rgba(150,180,255,0.32) 0%,rgba(91,140,255,0.10) 35%,rgba(140,170,240,0.04) 70%,rgba(91,140,255,0.18) 100%);
+  --card-glow:rgba(91,140,255,0.10);
+  --card-sheen:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0) 40%);
+  --title-grad:linear-gradient(100deg,#ffffff 0%,#c9d8ff 55%,#7aa2ff 100%);
+}
+
+/* ----- Typographie ----- */
+.page-title,.nep__title,.stat-card__value,.login__title,.topbar__title,.brand__name{font-family:var(--font-display)}
+.page-title{
+  font-size:1.7rem;font-weight:700;letter-spacing:-0.04em;
+  background:var(--title-grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--text);
+  padding-bottom:2px;animation:titleIn 760ms var(--ease-out) both;
+}
+.page-title > .ico:first-child{-webkit-text-fill-color:initial;color:#fff}
+.page-title + div{font-size:0.86rem;font-weight:500;letter-spacing:0.005em;color:var(--muted);animation:fadeUp 700ms 120ms var(--ease-out) both}
+@keyframes titleIn{0%{opacity:0;transform:translateY(10px);filter:blur(6px)}100%{opacity:1;transform:none;filter:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* Titres de cartes (style inline historique) */
+.card > [style*="font-weight: 700"]:first-child,
+.card > [style*="font-weight: 800"]:first-child,
+.card > div:first-child > [style*="font-weight: 700"]:first-child,
+.card > div:first-child > [style*="font-weight: 800"]:first-child{
+  font-family:var(--font-display);letter-spacing:-0.02em;font-weight:600 !important;
+}
+.card > [style*="font-weight: 700"]:first-child:not(:has(.ico))::before,
+.card > [style*="font-weight: 800"]:first-child:not(:has(.ico))::before{
+  content:"";display:inline-block;width:6px;height:6px;margin:0 10px 2px 2px;border-radius:2px;transform:rotate(45deg);
+  background:var(--grad-brand);box-shadow:0 0 0 3px var(--primary-bg);vertical-align:middle;
+}
+
+/* ----- Cartes ----- */
+.card{
+  background:var(--card-sheen),var(--panel);
+  border-color:rgba(22,58,140,0.06);
+  box-shadow:0 1px 0 rgba(255,255,255,0.7) inset,var(--shadow);
+}
+html.dark .card{background:var(--card-sheen),var(--panel);border-color:rgba(140,170,240,0.06);box-shadow:0 1px 0 rgba(255,255,255,0.04) inset,var(--shadow)}
+/* Liseré dégradé */
+.card::after{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;
+  background:var(--card-edge);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  opacity:0.9;transition:opacity var(--dur-slow) var(--ease-std);
+}
+/* Halo qui suit la souris (--cx/--cy posés par ui/motion.js) */
+.card::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  background:radial-gradient(380px circle at var(--cx,50%) var(--cy,0%),var(--card-glow),transparent 62%);
+  transition:opacity 380ms var(--ease-std);
+}
+.card:hover::before{opacity:1}
+.card:hover{border-color:rgba(36,86,230,0.14);box-shadow:0 1px 0 rgba(255,255,255,0.7) inset,var(--shadow-md)}
+html.dark .card:hover{border-color:rgba(91,140,255,0.2);box-shadow:0 1px 0 rgba(255,255,255,0.05) inset,var(--shadow-md)}
+.card:hover::after{
+  opacity:1;
+  background:radial-gradient(240px circle at var(--cx,50%) var(--cy,0%),rgba(59,111,245,0.6),transparent 70%),var(--card-edge);
+}
+.card .card::after,.card .card::before{display:none}
+
+/* ----- Cartes KPI ----- */
+.stat-card{
+  --stat-accent:var(--primary);
+  background:
+    radial-gradient(170px circle at 100% 0%,color-mix(in srgb,var(--stat-accent) 13%,transparent),transparent 70%),
+    var(--card-sheen),var(--panel) !important;
+  padding:16px 18px !important;min-height:112px;
+}
+html.dark .stat-card{background:radial-gradient(170px circle at 100% 0%,color-mix(in srgb,var(--stat-accent) 16%,transparent),transparent 70%),var(--card-sheen),var(--panel) !important}
+.stat-card::after{transform:none;height:auto;inset:-1px;opacity:0.9}
+.stat-card:hover{transform:translateY(-3px)}
+.stat-card:hover::after{transform:none}
+.stat-card__label{display:flex;align-items:center;gap:7px;font-size:0.68rem;letter-spacing:0.09em;color:var(--muted);padding-right:34px;line-height:1.35;min-height:30px}
+.stat-card__label::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--stat-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--stat-accent) 18%,transparent);flex-shrink:0}
+.stat-card__value{font-size:2rem;font-weight:700;letter-spacing:-0.045em;margin-top:10px !important;animation:valueIn 900ms var(--ease-out) both}
+@keyframes valueIn{from{opacity:0;filter:blur(8px);transform:translateY(6px)}to{opacity:1;filter:none;transform:none}}
+.stat-card__icon{
+  position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-size:14px;
+  color:var(--stat-accent);background:color-mix(in srgb,var(--stat-accent) 10%,var(--panel));
+  border:1px solid color-mix(in srgb,var(--stat-accent) 20%,transparent);
+  transition:transform var(--dur-slow) var(--ease-spring),box-shadow var(--dur);
+}
+.stat-card:hover .stat-card__icon{transform:rotate(-8deg) scale(1.08);box-shadow:0 8px 20px -8px var(--stat-accent)}
+
+/* ----- Tableaux ----- */
+.content table{border-collapse:separate;border-spacing:0}
+.data-table thead th,.content table:not(.nep__table) thead th{
+  font-family:var(--font-display);font-size:0.66rem;font-weight:600;letter-spacing:0.1em;
+  background:linear-gradient(180deg,var(--panel-2),color-mix(in srgb,var(--panel-3) 55%,var(--panel-2)));
+  color:var(--muted);border-bottom:1px solid var(--border-strong);
+}
+.data-table tbody tr td,.content table:not(.nep__table) tbody tr td{transition:background-color 180ms var(--ease-std),color 180ms,box-shadow 180ms}
+.data-table tbody tr:nth-child(even) td,.content table:not(.nep__table) tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--panel-2) 60%,transparent)}
+.data-table tbody tr:hover td,.content table:not(.nep__table) tbody tr:hover td{background:color-mix(in srgb,var(--primary) 7%,var(--panel))}
+.data-table tbody tr:hover td:first-child,.content table:not(.nep__table) tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--primary);color:var(--primary)}
+.content table tbody tr:has(button,a){cursor:pointer}
+
+/* ----- Survols & boutons ----- */
+.btn{letter-spacing:-0.01em}
+.btn:not(.btn--ghost):not(.btn--danger)::after{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,0.35) 50%,transparent 70%);
+  transform:translateX(-120%);transition:transform 700ms var(--ease-out);
+}
+.btn:not(.btn--ghost):not(.btn--danger):hover::after{transform:translateX(120%)}
+.badge{transition:transform 200ms var(--ease-spring)}
+tr:hover .badge{transform:translateY(-1px)}
+.nav__item--active .nav__label{font-weight:700}
+
+/* Topbar : liseré lumineux */
+.topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(59,111,245,0.4),rgba(14,165,164,0.28),transparent)}
+
+/* ----- Fond : maillage, halo conique, grain, poussière ----- */
+.luxe-bg__mesh{position:absolute;inset:0;
+  background:
+    radial-gradient(60% 50% at 85% 0%,rgba(91,140,255,0.20),transparent 70%),
+    radial-gradient(45% 45% at 0% 30%,rgba(147,197,253,0.22),transparent 70%),
+    radial-gradient(50% 40% at 60% 100%,rgba(45,212,191,0.10),transparent 70%),
+    radial-gradient(35% 35% at 35% 55%,rgba(255,255,255,0.65),transparent 70%),
+    linear-gradient(180deg,#f3f7ff 0%,#e9f0fd 55%,#e4ecfb 100%)}
+html.dark .luxe-bg__mesh{
+  background:
+    radial-gradient(60% 50% at 85% 0%,rgba(59,111,245,0.22),transparent 70%),
+    radial-gradient(45% 45% at 0% 35%,rgba(30,64,175,0.20),transparent 70%),
+    radial-gradient(50% 40% at 60% 100%,rgba(14,165,164,0.10),transparent 70%),
+    linear-gradient(180deg,#060c1d 0%,#050a17 60%,#040814 100%)}
+.luxe-bg__halo{position:absolute;width:900px;height:900px;right:-260px;top:-420px;border-radius:50%;opacity:0.55;filter:blur(70px);
+  background:conic-gradient(from 0deg,rgba(59,111,245,0.35),rgba(147,197,253,0.10),rgba(45,212,191,0.22),rgba(99,102,241,0.18),rgba(59,111,245,0.35));
+  animation:haloSpin 70s linear infinite}
+html.dark .luxe-bg__halo{opacity:0.45}
+@keyframes haloSpin{to{transform:rotate(360deg)}}
+.luxe-bg__aura{filter:blur(70px)}
+.luxe-bg__aura--1{opacity:1}
+.luxe-bg__spot{background:radial-gradient(560px circle at var(--mx) var(--my),rgba(59,111,245,0.13),transparent 62%)}
+html.dark .luxe-bg__spot{background:radial-gradient(560px circle at var(--mx) var(--my),rgba(91,140,255,0.12),transparent 62%)}
+.luxe-bg__dust{position:absolute;inset:0;width:100%;height:100%}
+.luxe-bg__grain{position:absolute;inset:-50%;opacity:0.05;mix-blend-mode:multiply;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.2 0 0 0 0 0.5 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+html.dark .luxe-bg__grain{opacity:0.07;mix-blend-mode:screen}
+body{background:#e9f0fd}
+html.dark body{background:#050a17}
+.luxe-bg--login .luxe-bg__halo{right:-400px}

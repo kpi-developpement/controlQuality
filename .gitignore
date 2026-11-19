@@ -1,0 +1,24 @@
+
+apply_modifs.sh
+backend/node_modules/
+*.backup-*
+backup-*/
+*.bak
+# Configurations locales
+# Dépendances installées
+.env
+Frontend/.env
+Frontend/node_modules/
+*.macvlan-backup
+# Sauvegardes locales
+*.save
+*.tar.gz
+*.working-backup
+
+# Locaux (ne pas versionner)
+_backup_design/
+.claude/
+backend/uploads/
+backend/audio_local/
+Frontend/dist/
+*.local
