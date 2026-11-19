@@ -322,7 +322,8 @@ async function seedAll() {
 }
 
 (async () => {
-  const local = /^mongodb:\/\/(127\.0\.0\.1|localhost|mongo)(:\d+)?\//.test(MONGO_URI);
+  // Uniquement une base sur ce poste. « mongo » (nom du service Docker) = base du serveur : refusé.
+  const local = /^mongodb:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(MONGO_URI) && process.env.NODE_ENV !== "production";
   if (!local && !ARGS.has("--force")) {
     console.error(`⛔ MONGO_URI ne pointe pas vers une base locale (${MONGO_URI.replace(/\/\/.*@/, "//***@")}). Ajoutez --force si c'est voulu.`);
     process.exit(1);
