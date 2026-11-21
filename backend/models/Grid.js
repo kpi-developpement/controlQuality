@@ -53,6 +53,11 @@ const GridSchema = new mongoose.Schema(
     // Sens d'appel ciblé (calibrages entrants / sortants). "" = indifférent
     callDirection: { type: String, enum: ["", "inbound", "outbound"], default: "" },
 
+    // Rangement : Contrat → Activité → Cellule(s). Vide = grille non classée (proposée partout).
+    contract: { type: String, default: "", trim: true },
+    activity: { type: String, default: "", trim: true },
+    cells: { type: [String], default: [] },
+
     // Soft delete: keep grids for historical evaluations
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },

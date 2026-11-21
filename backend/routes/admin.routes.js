@@ -686,6 +686,7 @@ router.post(
         active: active !== undefined ? active : true,
         project: String(req.body.project || "").trim(),
         contract: String(req.body.contract || "").trim(),
+        activity: String(req.body.activity || "").trim(),
       });
 
       res.status(201).json(cell);
@@ -713,6 +714,7 @@ router.patch(
       if (active !== undefined) update.active = active;
       if (req.body.project !== undefined) update.project = String(req.body.project || "").trim();
       if (req.body.contract !== undefined) update.contract = String(req.body.contract || "").trim();
+      if (req.body.activity !== undefined) update.activity = String(req.body.activity || "").trim();
 
       const cell = await Cell.findByIdAndUpdate(id, update, {
         new: true,
@@ -780,6 +782,18 @@ router.get(
   }
 );
 
+/** Rangement d'une grille : contrat, activité, cellules (chaînes nettoyées). */
+function gridPlacement(body, partial = false) {
+  const out = {};
+  const clean = (v) => String(v || "").trim().slice(0, 120);
+  if (!partial || body.contract !== undefined) out.contract = clean(body.contract);
+  if (!partial || body.activity !== undefined) out.activity = clean(body.activity);
+  if (!partial || body.cells !== undefined) {
+    out.cells = [...new Set((Array.isArray(body.cells) ? body.cells : []).map(clean).filter(Boolean))].slice(0, 200);
+  }
+  return out;
+}
+
 /**
  * POST /admin/grids
  * Body attendu : { name, description, items: [{type:'group',title} | {type:'item',label,pointsConforme,pointsNonConforme,order}], roles: ['cq','management'], active }
@@ -817,6 +831,7 @@ router.post(
         active: active !== undefined ? active : true,
         usage: GRID_USAGES.includes(String(req.body.usage)) ? String(req.body.usage) : "evaluation",
         callDirection: ["inbound", "outbound"].includes(String(req.body.callDirection)) ? String(req.body.callDirection) : "",
+        ...gridPlacement(req.body),
       });
 
       res.status(201).json(grid);
@@ -897,6 +912,8 @@ router.patch(
       if (req.body.callDirection !== undefined) {
         update.callDirection = ["inbound", "outbound"].includes(String(req.body.callDirection)) ? String(req.body.callDirection) : "";
       }
+
+      Object.assign(update, gridPlacement(req.body, true));
 
       const grid = await Grid.findByIdAndUpdate(id, update, { new: true });
       if (!grid) {

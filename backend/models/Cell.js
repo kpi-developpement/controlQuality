@@ -16,6 +16,8 @@ const CellSchema = new mongoose.Schema(
     // Rattachement optionnel (contrat Orange)
     project: { type: String, default: "", trim: true },
     contract: { type: String, default: "", trim: true },
+    // Activité du contrat (référentiel Activités) : Contrat → Activité → Cellule
+    activity: { type: String, default: "", trim: true },
     active: {
       type: Boolean,
       default: true,

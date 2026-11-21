@@ -1,3 +1,4 @@
+import { gridsForCell } from "../../utils/gridScope.js";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import api from "../../api";
 import AsyncSelect from "react-select/async";
@@ -20,6 +21,23 @@ function normalizeStatus(raw) {
   return "";
 }
 function isTrue(v) { return v === true || v === 1 || v === "1" || v === "true" || v === "on"; }
+const MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+/** Mois de prime proposés : 6 mois passés → mois suivant (valeur "AAAA-MM"). */
+function primeMonthOptions(extra) {
+  const now = new Date();
+  const out = [];
+  for (let i = 1; i >= -6; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    out.push({ value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}` });
+  }
+  if (extra && !out.some((o) => o.value === extra)) out.push({ value: extra, label: primeMonthLabel(extra) });
+  return out;
+}
+function primeMonthLabel(v) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(v || ""));
+  return m ? `${MONTHS_FR[Number(m[2]) - 1]} ${m[1]}` : "";
+}
+
 function isoDate(v) {
   const d = v ? new Date(v) : new Date();
   if (Number.isNaN(d.getTime())) return "";
@@ -160,12 +178,17 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
 
   const [pilots, setPilots] = useState([]);
   const [grids, setGrids] = useState([]);
+  const [cellsRef, setCellsRef] = useState([]);
 
   const [pilotId, setPilotId] = useState("");
   const [gridId, setGridId] = useState("");
   const [eps, setEps] = useState("");
-  const [callDate, setCallDate] = useState(isoDate(new Date()));
+  const [pilotCell, setPilotCell] = useState("");
+  const [primeMonth, setPrimeMonth] = useState("");
+  // Date de l'appel : obligatoire et différente du jour J ; date d'évaluation = toujours aujourd'hui
+  const [callDate, setCallDate] = useState("");
   const [interactionDate, setInteractionDate] = useState(isoDate(new Date()));
+  const today = isoDate(new Date());
   const [pickingPrime, setPickingPrime] = useState(false);
   const [comment, setComment] = useState("");
   const [callDuration, setCallDuration] = useState("");
@@ -318,7 +341,7 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
       if (d.gridId) setGridId(String(d.gridId));
       if (d.eps) setEps(String(d.eps));
       if (d.callDate) setCallDate(String(d.callDate));
-      if (d.interactionDate) setInteractionDate(String(d.interactionDate));
+      if (d.primeMonth) setPrimeMonth(String(d.primeMonth));
       if (d.callDuration) setCallDuration(String(d.callDuration));
       if (d.comment) setComment(String(d.comment));
       if (d.pickingPrime !== undefined) setPickingPrime(!!d.pickingPrime);
@@ -330,14 +353,21 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
   useEffect(() => {
     if (editScoreId || effectiveIsPicking || mode !== "standard") return;
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ pilotId, gridId, eps, callDate, interactionDate, callDuration, comment, pickingPrime, statusByKey, updatedAt: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ pilotId, gridId, eps, callDate, primeMonth, callDuration, comment, pickingPrime, statusByKey, updatedAt: Date.now() }));
     } catch {}
-  }, [editScoreId, effectiveIsPicking, pilotId, gridId, eps, callDate, interactionDate, callDuration, comment, pickingPrime, statusByKey, draftKey]);
+  }, [editScoreId, effectiveIsPicking, pilotId, gridId, eps, callDate, primeMonth, callDuration, comment, pickingPrime, statusByKey, draftKey]);
 
   /* ---- Load pilots ---- */
   useEffect(() => {
     let m = true;
     api.get("/cq/pilots/search", { params: { limit: 200 } }).then((r) => m && setPilots(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    return () => { m = false; };
+  }, []);
+
+  /* ---- Cellules (rangement Contrat → Activité → Cellule des grilles) ---- */
+  useEffect(() => {
+    let m = true;
+    api.get("/admin/cells").then((r) => m && setCellsRef(Array.isArray(r.data) ? r.data : [])).catch(() => {});
     return () => { m = false; };
   }, []);
 
@@ -374,6 +404,8 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
         else if (data?.callDate) setInteractionDate(isoDate(new Date(data.callDate)));
         setClosureCode(String(data?.closureCode || ""));
         setCallDirection(String(data?.callDirection || ""));
+        setPrimeMonth(String(data?.primeMonth || ""));
+        setPilotCell(String(data?.pilot?.cell || data?.cellAtEvaluation || ""));
         setLoadedType(String(data?.evaluationType || "standard"));
         setSavedScoreItems(Array.isArray(data?.items) ? data.items : []);
       } catch (e) { if (m) setErr(e?.response?.data?.message || "Erreur lors du chargement."); }
@@ -394,15 +426,37 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
     return () => { m = false; };
   }, [editScoreId, gridId, grids]);
 
-  const pilotOptions = useMemo(() => (pilots || []).map((p) => ({ value: String(p._id), label: `${p.name || ""}${p.cell ? " — " + p.cell : ""}`.trim() })), [pilots]);
+  const pilotOptions = useMemo(() => (pilots || []).map((p) => ({ value: String(p._id), label: String(p.name || "").trim(), cell: p.cell || "" })), [pilots]);
+  // Cellule d'affectation de l'agent choisi (affichée à part, non modifiable)
+  useEffect(() => {
+    if (!pilotId) { setPilotCell(""); return; }
+    const p = (pilots || []).find((x) => String(x._id) === String(pilotId));
+    if (p) setPilotCell(p.cell || "");
+  }, [pilotId, pilots]);
   async function loadPilots(v) {
     try {
       const r = await api.get("/cq/pilots/search", { params: { q: String(v || "").trim(), limit: 200 } });
-      return (r.data || []).map((p) => ({ value: String(p._id), label: `${p.name || ""}${p.cell ? " — " + p.cell : ""}`.trim() }));
+      return (r.data || []).map((p) => ({ value: String(p._id), label: String(p.name || "").trim(), cell: p.cell || "" }));
     } catch { return pilotOptions; }
   }
 
   const selectedGrid = useMemo(() => (grids || []).find((g) => String(g._id) === String(gridId)), [grids, gridId]);
+  // Grilles proposées : seulement celles de la cellule de l'agent (la grille déjà enregistrée reste visible en modification)
+  const cellGrids = useMemo(() => {
+    if (!pilotId) return grids || [];
+    const cellDoc = (cellsRef || []).find((c) => c.name === pilotCell) || (pilotCell ? { name: pilotCell } : null);
+    const list = gridsForCell(grids, cellDoc);
+    if (gridId && !list.some((g) => String(g._id) === String(gridId))) {
+      const cur = (grids || []).find((g) => String(g._id) === String(gridId));
+      if (cur && (editScoreId || effectiveIsPicking)) return [cur, ...list];
+    }
+    return list;
+  }, [grids, cellsRef, pilotCell, pilotId, gridId, editScoreId, effectiveIsPicking]);
+  // Agent changé : la grille choisie n'appartient plus à sa cellule → on la retire
+  useEffect(() => {
+    if (!gridId || editScoreId || effectiveIsPicking || !pilotId || !pilotCell || !cellsRef.length) return;
+    if (!cellGrids.some((g) => String(g._id) === String(gridId))) setGridId("");
+  }, [cellGrids]);
   const gridType = (selectedGrid?.gridType || "classic").toString();
   const statusOptions = gridType === "presence" ? STATUS_PRESENCE : STATUS_CLASSIC;
   const renderRows = useMemo(() => {
@@ -441,11 +495,14 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
     if (!gridId) return setErr("Veuillez choisir une grille.");
     if (!String(eps || "").trim()) return setErr("Veuillez renseigner l'EPS.");
     if (!isValidDuration(callDuration)) return setErr("Durée invalide.");
+    if (!callDate) return setErr("Veuillez renseigner la date de l'appel.");
+    if (!effectiveIsPicking && !editScoreId && callDate >= today) return setErr("La date de l'appel doit être antérieure à la date du jour.");
+    if (!isCalibration && !primeMonth) return setErr("Veuillez choisir le mois concerné par la prime.");
     if (isCalibration && !callDirection) return setErr("Précisez le sens de l'appel (entrant ou sortant) pour un calibrage.");
     if (isSampleMode && !editScoreId && !sampleCtx?._id) return setErr("Aucun échantillon sélectionné. Repassez par l'onglet Échantillons.");
     const items = renderRows.filter((r) => r.type !== "group").map((r) => ({ label: String(r.label || "").trim(), status: statusByKey[String(r.__idx)] || (gridType === "presence" ? "PC" : "C") })).filter((it) => it.label);
     if (!items.length) return setErr("Cette grille ne contient aucun item évaluable.");
-    const payload = { pilotId, gridId, eps: String(eps || "").trim(), pickingPrime: !!pickingPrime, callDate: callDate ? new Date(callDate).toISOString() : null, interactionDate: interactionDate ? new Date(interactionDate).toISOString() : callDate ? new Date(callDate).toISOString() : null, callDuration: callDuration || "", comment: comment || "", items, closureCode: String(closureCode || "").trim(), callDirection: callDirection || "" };
+    const payload = { pilotId, gridId, eps: String(eps || "").trim(), pickingPrime: !!pickingPrime, callDate: callDate ? new Date(callDate).toISOString() : null, interactionDate: editScoreId ? (interactionDate ? new Date(interactionDate).toISOString() : null) : new Date().toISOString(), primeMonth: isCalibration ? "" : primeMonth, callDuration: callDuration || "", comment: comment || "", items, closureCode: String(closureCode || "").trim(), callDirection: callDirection || "" };
     if (!editScoreId) {
       payload.evaluationType = isCalibration ? "calibration" : isSampleMode ? "sample" : effectiveIsPicking ? "picking" : "standard";
       if (isSampleMode && sampleCtx?._id) payload.sampleId = String(sampleCtx._id);
@@ -619,6 +676,10 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                   <div className="nep__v">{pilotOptions.find((o) => String(o.value) === String(pilotId))?.label || "—"}</div>
                 </div>
                 <div className="nep__kv">
+                  <div className="nep__k">Cellule</div>
+                  <div className="nep__v">{pilotCell || "—"}</div>
+                </div>
+                <div className="nep__kv">
                   <div className="nep__k">Grille</div>
                   <div className="nep__v">{selectedGrid?.name || selectedGrid?.title || "—"}</div>
                 </div>
@@ -642,10 +703,17 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                   <div className="nep__k">Code de clôture</div>
                   <div className="nep__v">{closureCode || "—"}</div>
                 </div>
-                <div className="nep__kv">
-                  <div className="nep__k">Sens d'appel</div>
-                  <div className="nep__v">{DIRECTIONS.find((d) => d.value === callDirection)?.label || "—"}</div>
-                </div>
+                {isCalibration ? (
+                  <div className="nep__kv">
+                    <div className="nep__k">Sens d'appel</div>
+                    <div className="nep__v">{DIRECTIONS.find((d) => d.value === callDirection)?.label || "—"}</div>
+                  </div>
+                ) : (
+                  <div className="nep__kv">
+                    <div className="nep__k">Mois de la prime</div>
+                    <div className="nep__v">{primeMonthLabel(primeMonth) || "—"}</div>
+                  </div>
+                )}
               </div>
 
               {effectiveIsPicking && (
@@ -717,12 +785,15 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
             <div className="nep__section">
               <div className="nep__sectionTitle">Informations</div>
               <div className="nep__grid">
-                <div className="nep__field nep__field--span2">
-                  <div className="label">Agent <HelpTip text="Agent évalué." /></div>
+                <div className="nep__field">
+                  <div className="label">Agent * <HelpTip text="Agent évalué." /></div>
                   <AsyncSelect
                     cacheOptions defaultOptions={pilotOptions} loadOptions={loadPilots}
                     value={pilotOptions.find((o) => String(o.value) === String(pilotId)) || null}
-                    onChange={(opt) => setPilotId(opt?.value || "")}
+                    onChange={(opt) => { setPilotId(opt?.value || ""); setPilotCell(opt?.cell || ""); }}
+                    formatOptionLabel={(o, { context }) => context === "menu" && o.cell
+                      ? <span>{o.label} <span style={{ color: "var(--muted)", fontSize: "0.78rem" }}>· {o.cell}</span></span>
+                      : o.label}
                     placeholder="Rechercher un agent…"
                     styles={{
                       control: (base, state) => ({ ...base, minHeight: 42, borderRadius: 10, borderColor: state.isFocused ? "var(--primary)" : "var(--border-strong)", boxShadow: state.isFocused ? "var(--ring)" : "var(--shadow-xs)", background: "var(--panel)", fontSize: "0.875rem", transition: "border-color 200ms, box-shadow 200ms", "&:hover": { borderColor: state.isFocused ? "var(--primary)" : "rgba(59,111,245,0.4)" } }),
@@ -739,11 +810,15 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                     }}
                   />
                 </div>
+                <div className="nep__field">
+                  <div className="label">Cellule d'affectation <HelpTip text="Cellule de l'agent choisi (renseignée automatiquement)." /></div>
+                  <input className="input nep__locked" value={pilotCell || (pilotId ? "Sans cellule" : "")} placeholder="Choisissez d'abord un agent" readOnly tabIndex={-1} aria-readonly="true" />
+                </div>
                 <div className="nep__field nep__field--span2">
                   <div className="label">Grille <HelpTip text="Critères & calcul." /></div>
                   <Select className="input" value={gridId} onChange={(e) => setGridId(e.target.value)}>
                     <option value="">{isCalibration && !(grids || []).length ? "Aucune grille de calibrage (à configurer par l'admin)" : "Choisir une grille"}</option>
-                    {(grids || []).map((g) => <option key={String(g._id)} value={String(g._id)}>{g.name || g.title || "Grille"}</option>)}
+                    {cellGrids.map((g) => <option key={String(g._id)} value={String(g._id)}>{g.name || g.title || "Grille"}</option>)}
                   </Select>
                 </div>
                 <div className="nep__field">
@@ -751,12 +826,13 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                   <input className="input" value={eps} onChange={(e) => setEps(e.target.value)} onBlur={() => checkEpsDuplicate(eps)} placeholder="EPS-123…" readOnly={effectiveIsPicking} style={effectiveIsPicking ? { background: "var(--chip)" } : undefined} />
                 </div>
                 <div className="nep__field">
-                  <div className="label">Date de l'appel <HelpTip text="Date du contact (auto en mode picking)." /></div>
-                  <input className="input" type="date" value={callDate} onChange={(e) => setCallDate(e.target.value)} readOnly={effectiveIsPicking} style={effectiveIsPicking ? { background: "var(--chip)" } : undefined} />
+                  <div className="label">Date de l'appel * <HelpTip text="Obligatoire, antérieure au jour de l'évaluation (auto en mode picking)." /></div>
+                  <input className="input" type="date" value={callDate} required max={effectiveIsPicking || editScoreId ? undefined : isoDate(new Date(Date.now() - 864e5))} onChange={(e) => setCallDate(e.target.value)} readOnly={effectiveIsPicking} style={effectiveIsPicking ? { background: "var(--chip)" } : undefined} />
+                  {!effectiveIsPicking && !editScoreId && callDate && callDate >= today ? <div className="nep__fieldErr">Doit être différente du jour (antérieure).</div> : null}
                 </div>
                 <div className="nep__field">
-                  <div className="label">Date de l'évaluation <HelpTip text="Date de réalisation." /></div>
-                  <input className="input" type="date" value={interactionDate} onChange={(e) => setInteractionDate(e.target.value)} />
+                  <div className="label">Date de l'évaluation <HelpTip text="Toujours la date du jour (non modifiable)." /></div>
+                  <input className="input nep__locked" type="date" value={editScoreId ? interactionDate : today} readOnly tabIndex={-1} aria-readonly="true" />
                 </div>
                 <div className="nep__field">
                   <div className="label">Durée <HelpTip text="Minutes et secondes." /></div>
@@ -804,12 +880,22 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                     {closureCodes.map((c) => <option key={String(c._id)} value={c.code}>{c.label || c.code}</option>)}
                   </datalist>
                 </div>
-                <div className="nep__field">
-                  <div className="label">Sens d'appel {isCalibration ? "*" : ""} <HelpTip text="Appel entrant ou sortant." /></div>
-                  <Select className="input" value={callDirection} onChange={(e) => setCallDirection(e.target.value)}>
-                    {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </Select>
-                </div>
+                {isCalibration ? (
+                  <div className="nep__field">
+                    <div className="label">Sens d'appel * <HelpTip text="Appel entrant ou sortant." /></div>
+                    <Select className="input" value={callDirection} onChange={(e) => setCallDirection(e.target.value)}>
+                      {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="nep__field">
+                    <div className="label">Mois de la prime * <HelpTip text="Mois de prime concerné par cette évaluation (obligatoire)." /></div>
+                    <Select className="input" value={primeMonth} onChange={(e) => setPrimeMonth(e.target.value)}>
+                      <option value="">Choisir le mois…</option>
+                      {primeMonthOptions(primeMonth).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Select>
+                  </div>
+                )}
               </div>
               <div className="nep__field nep__field--full">
                 <div className="label">Commentaire <HelpTip text="Notes internes." /></div>

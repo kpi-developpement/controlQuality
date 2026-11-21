@@ -8,6 +8,9 @@ const Project = require("../models/Project");
 const Contract = require("../models/Contract");
 const ClosureCode = require("../models/ClosureCode");
 const EvaluationTarget = require("../models/EvaluationTarget");
+const QualityObjective = require("../models/QualityObjective");
+const Cell = require("../models/Cell");
+const Activity = require("../models/Activity");
 const { getSettings, updateSettings, DEFAULTS } = require("../utils/settings");
 const { logAudit } = require("../utils/audit");
 
@@ -90,6 +93,21 @@ crud("contracts", Contract, {
   },
 });
 
+crud("activities", Activity, {
+  sort: { contract: 1, name: 1 },
+  build: (b, isNew) => {
+    const o = {};
+    if (isNew || b.name !== undefined) o.name = requireName(b.name);
+    if (isNew || b.contract !== undefined) {
+      o.contract = str(b.contract, 120);
+      if (!o.contract) throw Object.assign(new Error("Contrat obligatoire."), { status: 400 });
+    }
+    if (b.description !== undefined) o.description = str(b.description, 500);
+    if (b.active !== undefined) o.active = !!b.active;
+    return o;
+  },
+});
+
 crud("closure-codes", ClosureCode, {
   sort: { code: 1 },
   build: (b, isNew) => {
@@ -103,6 +121,52 @@ crud("closure-codes", ClosureCode, {
     if (b.active !== undefined) o.active = !!b.active;
     return o;
   },
+});
+
+/* ---------------- Objectifs par cellule (évaluations, pickings, coachings, échantillons, calibrages) ---------------- */
+function cleanCounts(raw) {
+  const out = {};
+  for (const a of QualityObjective.ACTIVITIES) {
+    const n = Number(raw && raw[a]);
+    if (raw && raw[a] !== undefined && raw[a] !== "" && (!Number.isFinite(n) || n < 0 || n > 100000)) {
+      throw Object.assign(new Error("Objectif invalide (nombre entre 0 et 100000)."), { status: 400 });
+    }
+    out[a] = Number.isFinite(n) ? Math.round(n) : 0;
+  }
+  return out;
+}
+
+router.get("/objectives", permit(...READERS), async (req, res) => {
+  try {
+    res.json(await QualityObjective.find({}).sort({ contract: 1, cell: 1 }).lean());
+  } catch (e) { handleError(res, e, "Chargement impossible."); }
+});
+
+router.put("/objectives", permit("admin"), async (req, res) => {
+  try {
+    const cell = str(req.body.cell, 120);
+    if (!cell) return res.status(400).json({ message: "Cellule obligatoire." });
+    const cellDoc = await Cell.findOne({ name: cell }).lean();
+    if (!cellDoc) return res.status(404).json({ message: "Cellule introuvable." });
+    const set = {
+      cell,
+      contract: cellDoc.contract || "",
+      base: req.body.base === "agent" ? "agent" : "cell",
+      updatedBy: req.user.id || req.user._id,
+    };
+    for (const g of QualityObjective.GROUPS) set[g] = cleanCounts(req.body[g]);
+    const doc = await QualityObjective.findOneAndUpdate({ cell }, { $set: set }, { upsert: true, new: true, runValidators: true });
+    await logAudit(req, { action: "UPDATE_OBJECTIVES", targetType: "cell", targetId: cellDoc._id, metadata: { cell } }).catch(() => {});
+    res.json(doc);
+  } catch (e) { handleError(res, e, "Enregistrement impossible."); }
+});
+
+router.delete("/objectives/:id", permit("admin"), async (req, res) => {
+  try {
+    const r = await QualityObjective.findByIdAndDelete(req.params.id);
+    if (!r) return res.status(404).json({ message: "Objectif introuvable." });
+    res.json({ ok: true });
+  } catch (e) { handleError(res, e, "Suppression impossible."); }
 });
 
 /* ---------------- Objectifs d'évaluations (taux de couverture) ---------------- */

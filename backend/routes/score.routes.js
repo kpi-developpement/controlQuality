@@ -24,6 +24,7 @@ const {
 const auth = require("../middleware/auth");
 const permit = require("../middleware/roles");
 
+const PRIME_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const router = express.Router();
 
 // Toutes les routes /scores/* nécessitent une authentification
@@ -228,6 +229,7 @@ router.post(
         closureCode,
         callDirection,
         sampleId,
+        primeMonth,
       } = req.body;
 
       const finalPilotId = pilotId || pilot;
@@ -254,6 +256,22 @@ router.post(
       }
       const closure = String(closureCode || "").trim().slice(0, 120);
       const direction = normalizeDirection(callDirection);
+
+      // Mois de prime obligatoire (sauf calibrage) ; date d'appel obligatoire et non future
+      const prime = String(primeMonth || "").trim();
+      if (prime && !PRIME_MONTH_RE.test(prime)) {
+        return res.status(400).json({ message: "Mois de prime invalide (format AAAA-MM)." });
+      }
+      if (evalType !== "calibration" && !prime) {
+        return res.status(400).json({ message: "Le mois concerné par la prime est obligatoire." });
+      }
+      const callDay = callDate ? new Date(callDate) : null;
+      if (!callDay || Number.isNaN(callDay.getTime())) {
+        return res.status(400).json({ message: "La date de l'appel est obligatoire." });
+      }
+      if (callDay.getTime() > Date.now()) {
+        return res.status(400).json({ message: "La date de l'appel ne peut pas être dans le futur." });
+      }
 
       const scope = await getScope(req);
       if (!(await isPilotInScope(scope, finalPilotId))) {
@@ -326,8 +344,11 @@ const score = await Score.create({
           gridId && mongoose.Types.ObjectId.isValid(gridId) ? gridId : null,
 
         listeningDate: listeningDate ? new Date(listeningDate) : null,
-        callDate: callDate ? new Date(callDate) : null,
-        interactionDate: interactionDate ? new Date(interactionDate) : null,
+        callDate: callDay,
+        // Date de l'évaluation = toujours la date du jour (fixée par le serveur)
+        interactionDate: new Date(),
+        evaluationDate: new Date(),
+        primeMonth: evalType === "calibration" ? "" : prime,
 
         eps: epsClean || "",
         pickingPrime: isTrue(pickingPrime),
@@ -899,6 +920,7 @@ router.get(
           evaluationType: s.evaluationType || "standard",
           closureCode: s.closureCode || "",
           callDirection: s.callDirection || "",
+          primeMonth: s.primeMonth || "",
           pilotValidated: !!s.pilotValidated,
           pilotValidatedAt: s.pilotValidatedAt || null,
           pilotValidationComment: s.pilotValidationComment || "",
@@ -1649,6 +1671,7 @@ router.patch(
         contestComment,
         closureCode,
         callDirection,
+        primeMonth,
       } = req.body;
 
       const finalPilot = pilotId || pilot;
@@ -1673,6 +1696,11 @@ router.patch(
 
 if (closureCode !== undefined) score.closureCode = String(closureCode || "").trim().slice(0, 120);
 if (callDirection !== undefined) score.callDirection = normalizeDirection(callDirection);
+if (primeMonth !== undefined) {
+  const pm = String(primeMonth || "").trim();
+  if (pm && !PRIME_MONTH_RE.test(pm)) return res.status(400).json({ message: "Mois de prime invalide (format AAAA-MM)." });
+  score.primeMonth = pm;
+}
 
 if (eps !== undefined) {
   const epsClean = (eps || "").toString().trim();

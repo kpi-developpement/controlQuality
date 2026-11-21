@@ -163,7 +163,7 @@ function App() {
             },
             {
               key: "training",
-              label: "Formations",
+              label: "Formations & Quiz",
               icon: <FiBookOpen />,
               active: adminTab === "training",
               onClick: () => setAdminTab("training"),
@@ -243,7 +243,7 @@ function App() {
             },
             {
               key: "training",
-              label: "Formations",
+              label: "Formations & Quiz",
               icon: <FiBookOpen />,
               active: cqView === "training",
               onClick: () => setCqView("training"),
@@ -294,7 +294,7 @@ function App() {
         {
           title: "FORMATION",
           items: [
-            { key: "training", label: "Formations", icon: <FiBookOpen />, active: formateurView === "training", onClick: () => setFormateurView("training") },
+            { key: "training", label: "Formations & Quiz", icon: <FiBookOpen />, active: formateurView === "training", onClick: () => setFormateurView("training") },
             { key: "onboarding", label: "Pilotes & formations", icon: <FiUserPlus />, active: formateurView === "onboarding", onClick: () => setFormateurView("onboarding") },
           ],
         },
@@ -347,7 +347,7 @@ function App() {
                 },
                 {
                   key: "training",
-                  label: "Formations",
+                  label: "Formations & Quiz",
                   icon: <FiBookOpen />,
                   active: pilotView === "training",
                   onClick: () => setPilotView("training"),
@@ -414,7 +414,7 @@ function App() {
             },
             {
               key: "training",
-              label: "Formations",
+              label: "Formations & Quiz",
               icon: <FiBookOpen />,
               active: mgmtView === "training",
               onClick: () => setMgmtView("training"),
@@ -452,7 +452,7 @@ function App() {
             item("picking", "Appels à évaluer", <FiPhone />),
             item("contestations", "Contestations", <FiAlertTriangle />),
             ...(isSup ? [item("coaching", "Coaching", <FiHeadphones />), item("samples", "Échantillons", <FiLayers />, { also: ["sample_eval"] })] : []),
-            item("training", "Formations", <FiBookOpen />),
+            item("training", "Formations & Quiz", <FiBookOpen />),
           ],
         },
       ];
@@ -483,7 +483,7 @@ function App() {
             item("contestations", "Contestations", <FiAlertTriangle />),
             item("samples", "Échantillons", <FiLayers />),
             item("coaching", "Coaching", <FiHeadphones />),
-            item("training", "Formations", <FiBookOpen />),
+            item("training", "Formations & Quiz", <FiBookOpen />),
           ],
         },
       ];
@@ -508,7 +508,7 @@ function App() {
             item("samples", "Échantillons", <FiLayers />),
             item("coaching", "Coaching", <FiHeadphones />),
             item("performance", "Performance agents", <FiBarChart2 />),
-            item("training", "Formations", <FiBookOpen />),
+            item("training", "Formations & Quiz", <FiBookOpen />),
           ],
         },
       ];

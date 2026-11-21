@@ -86,6 +86,7 @@ export function evalExportRow(s) {
     Résultat: pct >= 80 ? "Conforme (≥ 80 %)" : pct >= 50 ? "À améliorer (50-79 %)" : "Non conforme (< 50 %)",
     Commentaire: s.comment || "",
     "Picking prime": s.pickingPrime ? "Oui" : "Non",
+    "Mois prime": primeMonthText(s.primeMonth),
     "Durée appel": s.callDuration || "",
     Contestée: s.contested ? "Oui" : "Non",
     "Contestée (historique)": everContested(s) ? "Oui" : "Non",
@@ -144,4 +145,11 @@ export function navigate(view, extra = {}) {
   const role = getCurrentUser()?.role;
   if (!role) return;
   window.dispatchEvent(new CustomEvent("kcq:navigate", { detail: { role, view, ...extra } }));
+}
+
+const MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+/** "2026-11" → "Novembre 2026" */
+export function primeMonthText(v) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(v || ""));
+  return m ? `${MOIS[Number(m[2]) - 1]} ${m[1]}` : "";
 }

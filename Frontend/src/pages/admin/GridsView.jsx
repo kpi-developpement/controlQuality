@@ -3,6 +3,9 @@ import axios from "../../api";
 import Card from "./components/Card.jsx";
 import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
+import GridBrowser, { NO_ACTIVITY, UNCLASSIFIED } from "./GridBrowser.jsx";
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+import { useToast } from "../../toast/ToastProvider.jsx";
 const USAGE_LABELS = { evaluation: "Évaluation", calibration: "Calibrage", sample: "Échantillons", all: "Tous usages" };
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -19,8 +22,13 @@ const isItem = (it) => it?.type === "item";
 
 export default function GridsView() {
   const isAdminUser = (() => { try { return ["admin", "management"].includes(JSON.parse(localStorage.getItem("user") || "{}").role); } catch { return false; } })();
+  const toast = useToast();
   const [grids, setGrids] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [path, setPath] = useState({ contract: "", activity: "", cell: "" });
+  const [refs, setRefs] = useState({ contracts: [], activities: [], cells: [] });
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [editorGrid, setEditorGrid] = useState(null); // { _id, name, description, active, rolesAllowed, items: [] }
   const [collapsed, setCollapsed] = useState({}); // groupLocalId -> bool
@@ -29,20 +37,29 @@ export default function GridsView() {
     const r = await axios.get("/admin/grids");
     const list = Array.isArray(r.data) ? r.data : [];
     setGrids(list);
-    // keep selection if exists
-    if (!selectedId && list[0]?._id) setSelectedId(list[0]._id);
+  };
+  const loadRefs = async () => {
+    const [contracts, activities, cells] = await Promise.all([
+      axios.get("/referentials/contracts").then((r) => r.data).catch(() => []),
+      axios.get("/referentials/activities").then((r) => r.data).catch(() => []),
+      axios.get("/admin/cells").then((r) => r.data).catch(() => []),
+    ]);
+    setRefs({ contracts: contracts || [], activities: activities || [], cells: Array.isArray(cells) ? cells : [] });
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadRefs(); }, []);
 
   useEffect(() => {
     const g = grids.find((x) => x._id === selectedId);
-    if (!g) return;
+    if (!g) { setEditorGrid(null); return; }
     setEditorGrid({
       ...g,
       gridType: (g.gridType || "classic"),
       usage: g.usage || "evaluation",
       callDirection: g.callDirection || "",
+      contract: g.contract || "",
+      activity: g.activity || "",
+      cells: Array.isArray(g.cells) ? g.cells : [],
       rolesAllowed: Array.isArray(g.rolesAllowed) ? g.rolesAllowed : (g.role ? [g.role] : ["cq", "management"]),
       items: ensureIds(g.items || []),
     });
@@ -57,6 +74,10 @@ export default function GridsView() {
       description: "",
       active: true,
       rolesAllowed: ["cq", "management"],
+      // Pré-rangement selon l'emplacement courant (Contrat → Activité → Cellule)
+      contract: path.contract && path.contract !== UNCLASSIFIED ? path.contract : "",
+      activity: path.activity && path.activity !== NO_ACTIVITY ? path.activity : "",
+      cells: path.cell ? [path.cell] : [],
       items: [
         { type: "group", title: "Phase 1", hardFail: false, malusPercent: 0 },
         { type: "item", label: "Critère 1", pointsConforme: 1, pointsNonConforme: 0, malusPercent: 0 },
@@ -67,10 +88,18 @@ export default function GridsView() {
     setSelectedId(r.data?._id || null);
   };
 
-  const deleteGrid = async (id) => {
-    await axios.delete(`/admin/grids/${id}`);
-    await load();
-    if (id === selectedId) setSelectedId(null);
+  const deleteGrid = async () => {
+    if (!toDelete?._id) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`/admin/grids/${toDelete._id}`, { toast: false });
+      toast.success(`Grille « ${toDelete.name} » supprimée.`);
+      if (toDelete._id === selectedId) setSelectedId(null);
+      setToDelete(null);
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || "Suppression impossible.");
+    } finally { setDeleting(false); }
   };
 
   const saveGridInfo = async () => {
@@ -84,15 +113,20 @@ export default function GridsView() {
       // Contrat Orange : usage (évaluation / calibrage / échantillons) et sens d'appel
       usage: editorGrid.usage || "evaluation",
       callDirection: editorGrid.callDirection || "",
-    });
+      contract: editorGrid.contract || "",
+      activity: editorGrid.activity || "",
+      cells: editorGrid.cells || [],
+    }, { toast: false });
     await load();
+    toast.success("Informations de la grille enregistrées.");
   };
 
   const saveGridItems = async () => {
     if (!editorGrid?._id) return;
     const itemsToSave = (editorGrid.items || []).map(({ _localId, ...rest }, idx) => ({ ...rest, order: idx }));
-    await axios.patch(`/admin/grids/${editorGrid._id}/items`, { items: itemsToSave });
+    await axios.patch(`/admin/grids/${editorGrid._id}/items`, { items: itemsToSave }, { toast: false });
     await load();
+    toast.success("Critères de la grille enregistrés.");
   };
 
   // ---------- Editor operations ----------
@@ -246,42 +280,36 @@ export default function GridsView() {
         </Card>
       )}
 
-      <Card title="Gestion grilles" right={<button className="btn-outline" onClick={createGrid}>+ Créer une grille</button>}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.75rem" }}>
-          {grids.map((g) => (
-            <div
-              key={g._id}
-              style={{
-                border: "1px solid rgba(209,213,219,0.9)",
-                borderRadius: "1rem",
-                padding: "0.85rem",
-                background: g._id === selectedId ? "rgba(16,185,129,0.10)" : "transparent",
-                cursor: "pointer",
-              }}
-              onClick={() => setSelectedId(g._id)}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 900 }}>{g.name} <span className="badge badge--muted" style={{ fontSize: "0.7rem" }}>{USAGE_LABELS[g.usage || "evaluation"]}{g.callDirection === "inbound" ? " • entrant" : g.callDirection === "outbound" ? " • sortant" : ""}</span></div>
-                  <div style={{ opacity: 0.7, fontSize: "0.92rem" }}>{g.description || "—"}</div>
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {isAdminUser && (
-                    <button className="btn-outline" onClick={(e) => { e.stopPropagation(); deleteGrid(g._id); }}>
-                      Supprimer
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {!editorGrid && (
+        <GridBrowser
+          grids={grids}
+          contracts={refs.contracts}
+          activities={refs.activities}
+          cells={refs.cells}
+          path={path}
+          onPath={setPath}
+          onEdit={(g) => { setSelectedId(g._id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onDelete={(g) => setToDelete(g)}
+          canDelete={isAdminUser}
+          onCreate={createGrid}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        danger
+        title="Supprimer la grille ?"
+        message={<>Voulez-vous vraiment supprimer la grille <b>{toDelete?.name}</b> ? Elle ne sera plus proposée pour de nouvelles évaluations ; les évaluations déjà réalisées la conservent.</>}
+        confirmLabel="Oui, supprimer"
+        busy={deleting}
+        onConfirm={deleteGrid}
+        onCancel={() => setToDelete(null)}
+      />
 
       {/* Full width editor at bottom */}
       {editorGrid && (
         <Card
-          title="Éditeur grille"
+          title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelectedId(null)}><Ico n="arrowL" /> Retour aux grilles</button> Modifier : {editorGrid.name}</span>}
           right={
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button className="btn-outline" onClick={saveGridInfo}>Sauver infos</button>
@@ -349,6 +377,29 @@ export default function GridsView() {
   </Select>
   <span style={{ fontSize: "0.78rem", opacity: 0.7 }}>Une grille « Calibrages » n'apparaît plus dans « Nouvelle évaluation ».</span>
 </label>
+
+            <div className="grid-place">
+              <div className="grid-place__title"><Ico n="mapPin" /> Rangement de la grille</div>
+              <label className="label">Contrat
+                <Select className="input" value={editorGrid.contract || ""} onChange={(e) => setEditorGrid({ ...editorGrid, contract: e.target.value, activity: "", cells: [] })}>
+                  <option value="">Non classée</option>
+                  {[...new Set([...refs.contracts.filter((c) => c.active !== false).map((c) => c.name), ...(editorGrid.contract ? [editorGrid.contract] : [])])].map((n) => <option key={n} value={n}>{n}</option>)}
+                </Select>
+              </label>
+              <label className="label">Activité
+                <Select className="input" value={editorGrid.activity || ""} onChange={(e) => setEditorGrid({ ...editorGrid, activity: e.target.value, cells: [] })} disabled={!editorGrid.contract}>
+                  <option value="">Toutes les activités du contrat</option>
+                  {refs.activities.filter((a) => a.contract === editorGrid.contract && a.active !== false).map((a) => <option key={a._id} value={a.name}>{a.name}</option>)}
+                </Select>
+              </label>
+              <label className="label">Cellule(s)
+                <Select className="input" multiple value={editorGrid.cells || []} disabled={!editorGrid.contract}
+                  onChange={(e) => setEditorGrid({ ...editorGrid, cells: Array.from(e.target.selectedOptions || []).map((o) => o.value) })}>
+                  {refs.cells.filter((c) => (c.contract || "") === editorGrid.contract && (!editorGrid.activity || c.activity === editorGrid.activity)).map((c) => <option key={c._id} value={c.name}>{c.name}</option>)}
+                </Select>
+              </label>
+              <div className="grid-place__hint">Sans cellule choisie, la grille s'applique à toutes les cellules de l'activité (ou du contrat). Lors d'une évaluation, seules les grilles de la cellule de l'agent sont proposées.</div>
+            </div>
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ opacity: 0.85, fontWeight: 800 }}>Rôles:</span>

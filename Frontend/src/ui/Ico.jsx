@@ -6,6 +6,7 @@ import {
   FiAward, FiBriefcase, FiTrash2, FiLock, FiRepeat, FiActivity, FiFileText, FiLayers, FiCornerDownLeft,
   FiCalendar, FiZap, FiSlash, FiThumbsUp, FiXCircle, FiFile, FiGlobe, FiDatabase, FiWifi, FiMapPin, FiKey,
   FiArrowUpRight, FiArrowDownRight, FiPauseCircle, FiFolder, FiCommand, FiGrid, FiAlertCircle, FiInbox,
+  FiExternalLink, FiEye, FiEyeOff, FiCopy, FiShuffle, FiChevronRight, FiChevronLeft,
 } from "react-icons/fi";
 
 /** Icônes de l'interface (remplacent les emojis). Taille = 1em, hérite de la couleur du texte. */
@@ -20,6 +21,7 @@ const MAP = {
   xCircle: FiXCircle, file: FiFile, globe: FiGlobe, database: FiDatabase, radio: FiWifi, mapPin: FiMapPin, key: FiKey,
   up: FiArrowUpRight, down: FiArrowDownRight, pause: FiPauseCircle, folder: FiFolder, command: FiCommand, grid: FiGrid,
   alarm: FiAlertCircle, inbox: FiInbox,
+  external: FiExternalLink, eye: FiEye, eyeOff: FiEyeOff, copy: FiCopy, shuffle: FiShuffle, chevR: FiChevronRight, chevL: FiChevronLeft,
 };
 
 export default function Ico({ n, size, className = "", style, title }) {

@@ -7,6 +7,18 @@ import { useToast } from "../../toast/ToastProvider.jsx";
 import { VISIBILITY_SCOPES, EDIT_SCOPES, ROLE_LABELS } from "../../utils/evalMeta.js";
 import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+
+/** Mot de passe aléatoire lisible (sans caractères ambigus) : majuscules, minuscules, chiffres, symbole. */
+function generatePassword(len = 12) {
+  const U = "ABCDEFGHJKLMNPQRSTUVWXYZ", L = "abcdefghijkmnopqrstuvwxyz", D = "23456789", S = "@#$%&*!?";
+  const all = U + L + D + S;
+  const rnd = (n) => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; };
+  const chars = [U[rnd(U.length)], L[rnd(L.length)], D[rnd(D.length)], S[rnd(S.length)]];
+  while (chars.length < len) chars.push(all[rnd(all.length)]);
+  for (let i = chars.length - 1; i > 0; i--) { const j = rnd(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]; }
+  return chars.join("");
+}
 
 // Contrat Orange : liste déroulante d'un référentiel (garde une valeur ancienne absente de la liste)
 function RefSelect({ value, onChange, items, placeholder }) {
@@ -105,7 +117,12 @@ export default function UsersStructuresView() {
 
   // edit user / password
   const [editing, setEditing] = useState(null); // full user object
-  const [pwd, setPwd] = useState({ id: null, value: "" });
+  const [pwd, setPwd] = useState({ id: null, value: "", show: false, saved: "" });
+  const [confirmDel, setConfirmDel] = useState(null); // { kind: "user"|"cell", id, name }
+  const [deleting, setDeleting] = useState(false);
+  const [activities, setActivities] = useState([]);
+  const [cellActivity, setCellActivity] = useState("");
+  const cellNameRef = useRef(null);
 
   // bulk import
   const [bulkText, setBulkText] = useState("");
@@ -126,6 +143,7 @@ export default function UsersStructuresView() {
       axios.get("/referentials/projects").catch(() => ({ data: [] })),
       axios.get("/referentials/contracts").catch(() => ({ data: [] })),
     ]);
+    axios.get("/referentials/activities").then((r) => setActivities(Array.isArray(r.data) ? r.data : [])).catch(() => setActivities([]));
     setProjects(Array.isArray(pr.data) ? pr.data : []);
     setContracts(Array.isArray(ct.data) ? ct.data : []);
   };
@@ -231,17 +249,29 @@ export default function UsersStructuresView() {
     await load();
   };
 
-  const deleteUser = async (id) => {
-    if (!id) return;
-    await axios.delete(`/admin/users/${id}`);
-    await load();
+  const confirmDelete = async () => {
+    if (!confirmDel?.id) return;
+    setDeleting(true);
+    try {
+      if (confirmDel.kind === "cell") await axios.delete(`/admin/cells/${confirmDel.id}`, { toastSuccessMessage: `Cellule « ${confirmDel.name} » supprimée.` });
+      else await axios.delete(`/admin/users/${confirmDel.id}`, { toastSuccessMessage: `Utilisateur « ${confirmDel.name} » supprimé.` });
+      setConfirmDel(null);
+      await load();
+    } catch { /* toast d'erreur automatique */ } finally { setDeleting(false); }
   };
 
   const setPassword = async () => {
-    if (!pwd.id || !pwd.value) return;
-    await axios.patch(`/admin/users/${pwd.id}`, { password: pwd.value });
-    setPwd({ id: null, value: "" });
-    await load();
+    if (!pwd.id) return;
+    const value = String(pwd.value || "");
+    if (value.length < 6) { toast.error("Le mot de passe doit contenir au moins 6 caractères."); return; }
+    try {
+      await axios.patch(`/admin/users/${pwd.id}`, { password: value }, { toastSuccessMessage: "Mot de passe modifié. Pensez à le transmettre à l'utilisateur." });
+      setPwd((p) => ({ ...p, saved: value, show: true }));
+      await load();
+    } catch { /* toast d'erreur automatique */ }
+  };
+  const copyPassword = async (v) => {
+    try { await navigator.clipboard.writeText(v); toast.success("Mot de passe copié."); } catch { toast.error("Copie impossible : sélectionnez le texte manuellement."); }
   };
 
   // ---------- Bulk import (textarea) ----------
@@ -335,13 +365,20 @@ export default function UsersStructuresView() {
 
   // ---------- Cells actions ----------
   const createCell = async () => {
-    if (!cellName.trim()) return;
-    await axios.post("/admin/cells", { name: cellName.trim(), description: cellDescription || "", project: cellProject, contract: cellContract });
-    setCellName("");
-    setCellDescription("");
-    setCellProject("");
-    setCellContract("");
-    await load();
+    if (!cellName.trim()) {
+      toast.error("Saisissez d'abord le nom de la nouvelle cellule.");
+      cellNameRef.current?.focus();
+      return;
+    }
+    try {
+      await axios.post("/admin/cells", { name: cellName.trim(), description: cellDescription || "", project: cellProject, contract: cellContract, activity: cellActivity }, { toastSuccessMessage: `Cellule « ${cellName.trim()} » créée.` });
+      setCellName("");
+      setCellDescription("");
+      setCellProject("");
+      setCellContract("");
+      setCellActivity("");
+      await load();
+    } catch { /* toast d'erreur automatique (ex. nom déjà utilisé) */ }
   };
 
   const updateCell = async () => {
@@ -352,20 +389,17 @@ export default function UsersStructuresView() {
       active: editCell.active,
       project: editCell.project || "",
       contract: editCell.contract || "",
+      activity: editCell.activity || "",
     });
     setEditCell(null);
     await load();
   };
 
-  const deleteCell = async (id) => {
-    if (!id) return;
-    await axios.delete(`/admin/cells/${id}`);
-    await load();
-  };
+  const deleteCell = (c) => setConfirmDel({ kind: "cell", id: c._id, name: c.name });
 
   const closeAll = () => {
     setEditing(null);
-    setPwd({ id: null, value: "" });
+    setPwd({ id: null, value: "", show: false, saved: "" });
     setEditCell(null);
   };
 
@@ -524,11 +558,11 @@ export default function UsersStructuresView() {
                     <button className="btn-outline" onClick={() => setEditing({ ...u })}>
                       Modifier
                     </button>
-                    <button className="btn-outline" onClick={() => setPwd({ id: u._id, value: "" })}>
+                    <button className="btn-outline" onClick={() => setPwd({ id: u._id, name: u.name, value: "", show: false, saved: "" })}>
                       Mot de passe
                     </button>
-                    <button className="btn-outline" onClick={() => deleteUser(u._id)}>
-                      Supprimer
+                    <button className="btn-danger" onClick={() => setConfirmDel({ kind: "user", id: u._id, name: u.name })}>
+                      <Ico n="trash" /> Supprimer
                     </button>
                   </td>
                 </tr>
@@ -660,13 +694,21 @@ export default function UsersStructuresView() {
         </Card>
       </div>
 
-      <Card title="Structures / Cellules & Équipes" right={<button className="btn-outline" onClick={createCell}>Ajouter cellule</button>}>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr)", gap: "0.5rem", alignItems: "center", marginBottom: 12 }}>
-          <input className="input" placeholder="Nom de cellule" value={cellName} onChange={(e) => setCellName(e.target.value)} />
+      <Card title="Structures / Cellules & Équipes" right={<button className="btn-primary" onClick={createCell}><Ico n="plus" /> Ajouter cellule</button>}>
+        <form
+          onSubmit={(e) => { e.preventDefault(); createCell(); }}
+          style={{ display: "grid", gridTemplateColumns: "minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr)", gap: "0.5rem", alignItems: "center", marginBottom: 12 }}
+        >
+          <input ref={cellNameRef} className="input" placeholder="Nom de cellule *" value={cellName} onChange={(e) => setCellName(e.target.value)} />
           <input className="input" placeholder="Équipes (séparées par des virgules)" value={cellDescription} onChange={(e) => setCellDescription(e.target.value)} />
           <RefSelect value={cellProject} onChange={setCellProject} items={projects} placeholder="Projet (aucun)" />
-          <RefSelect value={cellContract} onChange={setCellContract} items={contracts} placeholder="Contrat (aucun)" />
-        </div>
+          <RefSelect value={cellContract} onChange={(v) => { setCellContract(v); setCellActivity(""); }} items={contracts} placeholder="Contrat (aucun)" />
+          <Select className="input" value={cellActivity} onChange={(e) => setCellActivity(e.target.value)} disabled={!cellContract}>
+            <option value="">{cellContract ? "Activité (aucune)" : "Activité : choisir un contrat"}</option>
+            {activities.filter((a) => a.contract === cellContract && a.active !== false).map((a) => <option key={a._id} value={a.name}>{a.name}</option>)}
+          </Select>
+          <button type="submit" hidden aria-hidden="true" />
+        </form>
 
         {/* Cell cards with members */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -686,13 +728,13 @@ export default function UsersStructuresView() {
                       <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>{safeStr(c.name)}</div>
                       <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
                         {cellMembers.length} membre{cellMembers.length > 1 ? "s" : ""} • {c.active === false ? "Inactive" : "Active"}
-                        {c.project ? ` • Projet : ${c.project}` : ""}{c.contract ? ` • Contrat : ${c.contract}` : ""}
+                        {c.project ? ` • Projet : ${c.project}` : ""}{c.contract ? ` • Contrat : ${c.contract}` : ""}{c.activity ? ` • ${c.activity}` : ""}
                       </div>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button className="btn-outline" style={{ fontSize: "0.8rem", padding: "4px 10px" }} onClick={() => setEditCell({ ...c })}>Modifier</button>
-                    <button className="btn-danger" style={{ fontSize: "0.8rem", padding: "4px 10px" }} onClick={() => deleteCell(c._id)}>Suppr.</button>
+                    <button className="btn-danger" style={{ fontSize: "0.8rem", padding: "4px 10px" }} onClick={() => deleteCell(c)}>Suppr.</button>
                   </div>
                 </div>
 
@@ -833,11 +875,39 @@ export default function UsersStructuresView() {
 
             {pwd.id && (
               <>
-                <div style={{ fontWeight: 900, fontSize: "1.05rem", marginBottom: "0.75rem" }}>Modifier mot de passe</div>
-                <input className="input" placeholder="Nouveau mot de passe" value={pwd.value} onChange={(e) => setPwd({ ...pwd, value: e.target.value })} />
+                <div style={{ fontWeight: 900, fontSize: "1.05rem", marginBottom: "0.25rem" }}>Modifier le mot de passe</div>
+                <div style={{ fontSize: "0.85rem", color: "var(--muted)", marginBottom: "0.9rem" }}>{pwd.name}</div>
+
+                <div className="pwd-field">
+                  <div className="label">Mot de passe actuel</div>
+                  <div className="pwd-current">
+                    <Ico n="lock" />
+                    <span>••••••••••</span>
+                    <span className="pwd-current__note">Non consultable : les mots de passe sont enregistrés chiffrés (personne ne peut les relire). Définissez-en un nouveau ci-dessous.</span>
+                  </div>
+                </div>
+
+                <div className="pwd-field">
+                  <div className="label">Nouveau mot de passe</div>
+                  <div className="pwd-input">
+                    <input className="input" type={pwd.show ? "text" : "password"} autoComplete="new-password" placeholder="Au moins 6 caractères" value={pwd.value} onChange={(e) => setPwd({ ...pwd, value: e.target.value, saved: "" })} />
+                    <button type="button" className="iconbtn" title={pwd.show ? "Masquer" : "Afficher"} aria-label={pwd.show ? "Masquer le mot de passe" : "Afficher le mot de passe"} onClick={() => setPwd({ ...pwd, show: !pwd.show })}><Ico n={pwd.show ? "eyeOff" : "eye"} /></button>
+                    <button type="button" className="iconbtn" title="Copier" aria-label="Copier le mot de passe" disabled={!pwd.value} onClick={() => copyPassword(pwd.value)}><Ico n="copy" /></button>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setPwd({ ...pwd, value: generatePassword(), show: true, saved: "" })}><Ico n="shuffle" /> Générer</button>
+                  </div>
+                  {pwd.value && pwd.value.length < 6 && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: 4 }}>Au moins 6 caractères.</div>}
+                </div>
+
+                {pwd.saved && (
+                  <div className="pwd-saved">
+                    <Ico n="checkCircle" /> Nouveau mot de passe enregistré : <code>{pwd.saved}</code>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => copyPassword(pwd.saved)}><Ico n="copy" /> Copier</button>
+                  </div>
+                )}
+
                 <div style={{ marginTop: "0.9rem", display: "flex", gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                  <button className="btn-outline" onClick={closeAll}>Annuler</button>
-                  <button className="btn-primary" onClick={setPassword}>Enregistrer</button>
+                  <button className="btn-outline" onClick={closeAll}>{pwd.saved ? "Fermer" : "Annuler"}</button>
+                  {!pwd.saved && <button className="btn-primary" onClick={setPassword} disabled={!pwd.value || pwd.value.length < 6}>Enregistrer</button>}
                 </div>
               </>
             )}
@@ -862,7 +932,15 @@ export default function UsersStructuresView() {
                     </div>
                     <div>
                       <div className="label" style={{ marginBottom: 4 }}>Contrat</div>
-                      <RefSelect value={editCell.contract || ""} onChange={(v) => setEditCell({ ...editCell, contract: v })} items={contracts} placeholder="Aucun" />
+                      <RefSelect value={editCell.contract || ""} onChange={(v) => setEditCell({ ...editCell, contract: v, activity: v === editCell.contract ? editCell.activity : "" })} items={contracts} placeholder="Aucun" />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div className="label" style={{ marginBottom: 4 }}>Activité</div>
+                      <Select className="input" value={editCell.activity || ""} onChange={(e) => setEditCell({ ...editCell, activity: e.target.value })} disabled={!editCell.contract}>
+                        <option value="">Aucune</option>
+                        {activities.filter((a) => a.contract === editCell.contract && a.active !== false).map((a) => <option key={a._id} value={a.name}>{a.name}</option>)}
+                        {editCell.activity && !activities.some((a) => a.contract === editCell.contract && a.name === editCell.activity) && <option value={editCell.activity}>{editCell.activity}</option>}
+                      </Select>
                     </div>
                   </div>
                   <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -884,6 +962,18 @@ export default function UsersStructuresView() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!confirmDel}
+        danger
+        title={confirmDel?.kind === "cell" ? "Supprimer la cellule ?" : "Supprimer l'utilisateur ?"}
+        message={confirmDel?.kind === "cell"
+          ? <>Voulez-vous vraiment supprimer la cellule <b>{confirmDel?.name}</b> ? Ses membres seront détachés de cette cellule.</>
+          : <>Voulez-vous vraiment supprimer l'utilisateur <b>{confirmDel?.name}</b> ? Cette action est définitive.</>}
+        confirmLabel="Oui, supprimer"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirmDel(null)}
+      />
     </>
   );
 }

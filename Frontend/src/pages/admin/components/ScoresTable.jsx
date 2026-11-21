@@ -1,4 +1,5 @@
 import React from "react";
+import { primeMonthText } from "../../../utils/evalMeta.js";
 
 const fmtDate = (d) => {
   if (!d) return "";
@@ -20,7 +21,7 @@ export default function ScoresTable({ rows, onEdit, onDelete }) {
       <table className="data-table">
         <thead>
           <tr>
-            {["Date", "Pilote", "Cellule", "Évaluateur", "EPS", "Type", "Code clôture", "Prime", "Score", "Statut", "Commentaire", "Actions"].map((h) => (
+            {["Date", "Pilote", "Cellule", "Évaluateur", "EPS", "Type", "Code clôture", "Prime", "Mois prime", "Score", "Statut", "Signature", "Commentaire", "Actions"].map((h) => (
               <th key={h}>{h}</th>
             ))}
           </tr>
@@ -36,8 +37,12 @@ export default function ScoresTable({ rows, onEdit, onDelete }) {
               <td><span className="badge badge--muted">{r.typeShort || "Standard"}</span></td>
               <td style={{ fontSize: "0.8rem" }}>{r.closureCode || "—"}</td>
               <td>{r.pickingPrime ? <span className="badge badge--primary">Oui</span> : <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>Non</span>}</td>
+              <td style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>{primeMonthText(r.__raw?.primeMonth) || "—"}</td>
               <td><span className={scoreBadge(r.score)}>{Number(r.score || 0)}%</span></td>
               <td>{r.status ? <span className="badge badge--warning">{r.status}</span> : ""}</td>
+              <td>{r.__raw?.pilotValidated
+                ? <span className="badge badge--success" title={r.__raw?.pilotValidatedAt ? `Signée le ${fmtDate(r.__raw.pilotValidatedAt)}` : "Signée"}>Signée</span>
+                : <span className="badge badge--muted">En attente</span>}</td>
               <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.comment || "—"}</td>
               <td>
                 <div style={{ display: "flex", gap: 6 }}>
@@ -52,7 +57,7 @@ export default function ScoresTable({ rows, onEdit, onDelete }) {
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr><td colSpan={12} className="empty-state"><div className="empty-state__text">Aucun résultat.</div></td></tr>
+            <tr><td colSpan={14} className="empty-state"><div className="empty-state__text">Aucun résultat.</div></td></tr>
           )}
         </tbody>
       </table>

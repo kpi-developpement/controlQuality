@@ -5,6 +5,7 @@ import App from './App.jsx';
 import './index.css';
 import './styles/luxe.css';
 import './styles/polish.css';
+import './styles/features.css';
 import api from './api.js';
 import { initRipple, attachNetworkProgress, initCardGlow } from './ui/motion.js';
 import { initPerf } from './ui/perf.js';

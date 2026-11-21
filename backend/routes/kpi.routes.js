@@ -11,6 +11,9 @@ const Training = require("../models/Training");
 const LoginEvent = require("../models/LoginEvent");
 const Sample = require("../models/Sample");
 const EvaluationTarget = require("../models/EvaluationTarget");
+const QualityObjective = require("../models/QualityObjective");
+const Cell = require("../models/Cell");
+const { matchesScopeFields } = require("../utils/scope");
 const { getScope, userFilterForScope, sampleFilterForScope } = require("../utils/scope");
 const { getSettings } = require("../utils/settings");
 const { PRODUCTION_TYPES, TYPE_LABELS, typeClause, typeOf } = require("../utils/evalTypes");
@@ -352,6 +355,82 @@ router.get("/cq-progress", permit(...READERS), async (req, res) => {
     });
   } catch (err) {
     handle(res, err, "GET /kpi/cq-progress error:");
+  }
+});
+
+/**
+ * GET /api/kpi/objectives-progress?month=YYYY-MM
+ * Avancement des tâches de chaque population (CQ, référents, management) par rapport aux
+ * objectifs fixés par cellule dans Paramètres qualité. Comptage par date de réalisation.
+ */
+const GROUP_OF_ROLE = { cq: "cq", formateur: "cq", referent: "referent", management: "management", superviseur: "management" };
+const ACTIVITY_OF_TYPE = { standard: "evaluations", picking: "pickings", sample: "samples", calibration: "calibrations" };
+router.get("/objectives-progress", permit(...READERS), async (req, res) => {
+  try {
+    const now = new Date();
+    const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month || "")) ? String(req.query.month) : K.monthKey(now);
+    const [y, m] = month.split("-").map(Number);
+    const from = new Date(Date.UTC(y, m - 1, 1));
+    const to = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+    const me = String(req.user.id || req.user._id);
+
+    const scope = await getScope(req);
+    let objectives = await QualityObjective.find({}).sort({ contract: 1, cell: 1 }).lean();
+    // Contrat courant de la cellule (il peut avoir changé depuis la saisie des objectifs)
+    const cellDocs = await Cell.find({ name: { $in: objectives.map((o) => o.cell) } }).select("name contract").lean();
+    const contractOf = new Map(cellDocs.map((c) => [c.name, c.contract || ""]));
+    objectives = objectives.map((o) => ({ ...o, contract: contractOf.has(o.cell) ? contractOf.get(o.cell) : o.contract }));
+    if (!scope.unrestricted && ["cell", "project", "contract"].includes(scope.mode)) {
+      objectives = objectives.filter((o) => matchesScopeFields(scope, { cell: o.cell, contract: o.contract }));
+    }
+    const cells = objectives.map((o) => o.cell);
+    if (!cells.length) return res.json({ month, myGroup: GROUP_OF_ROLE[req.user.role] || "", rows: [] });
+
+    const pilots = await User.find({ role: "pilote", cell: { $in: cells } }).select("_id cell active").lean();
+    const cellOfPilot = new Map(pilots.map((p) => [String(p._id), p.cell]));
+    const activeAgents = {};
+    for (const p of pilots) if (p.active !== false) activeAgents[p.cell] = (activeAgents[p.cell] || 0) + 1;
+
+    const [scores, coachings] = await Promise.all([
+      Score.find({ createdAt: { $gte: from, $lte: to }, evaluationType: { $in: Object.keys(ACTIVITY_OF_TYPE) } })
+        .select("pilot evaluator evaluationType cellAtEvaluation").lean(),
+      Coaching.find({ createdAt: { $gte: from, $lte: to } }).select("pilot coach").lean(),
+    ]);
+    const actorIds = [...new Set([...scores.map((s) => String(s.evaluator)), ...coachings.map((c) => String(c.coach))])].filter(isId);
+    const actors = await User.find({ _id: { $in: actorIds } }).select("_id role").lean();
+    const roleOf = new Map(actors.map((u) => [String(u._id), u.role]));
+
+    const blank = () => Object.fromEntries(QualityObjective.ACTIVITIES.map((a) => [a, { done: 0, mine: 0 }]));
+    const done = new Map(cells.map((c) => [c, { cq: blank(), referent: blank(), management: blank() }]));
+    const add = (cell, actorId, activity) => {
+      const bucket = done.get(cell);
+      const group = GROUP_OF_ROLE[roleOf.get(String(actorId))];
+      if (!bucket || !group) return;
+      bucket[group][activity].done += 1;
+      if (String(actorId) === me) bucket[group][activity].mine += 1;
+    };
+    for (const s of scores) {
+      const cell = s.cellAtEvaluation || cellOfPilot.get(String(s.pilot));
+      add(cell, s.evaluator, ACTIVITY_OF_TYPE[s.evaluationType || "standard"]);
+    }
+    for (const c of coachings) add(cellOfPilot.get(String(c.pilot)), c.coach, "coachings");
+
+    const rows = objectives.map((o) => {
+      const mult = o.base === "agent" ? (activeAgents[o.cell] || 0) : 1;
+      const groups = {};
+      for (const g of QualityObjective.GROUPS) {
+        groups[g] = {};
+        for (const a of QualityObjective.ACTIVITIES) {
+          const target = Number(o[g]?.[a] || 0) * mult;
+          const d = done.get(o.cell)[g][a];
+          groups[g][a] = { target, done: d.done, mine: d.mine, rate: target ? Math.round((d.done / target) * 1000) / 10 : null };
+        }
+      }
+      return { cell: o.cell, contract: o.contract || "", base: o.base, activeAgents: activeAgents[o.cell] || 0, groups };
+    });
+    res.json({ month, myGroup: GROUP_OF_ROLE[req.user.role] || "", rows });
+  } catch (err) {
+    handle(res, err, "GET /kpi/objectives-progress error:");
   }
 });
 

@@ -128,6 +128,21 @@ router.get("/stats/global", permit("admin", "formateur"), async (req, res) => {
   }
 });
 
+/** Tentatives de l'utilisateur courant (sans exposer celles des autres). */
+function myAttemptInfo(t, userId) {
+  const mine = (t.attempts || []).filter((a) => String(a.user) === String(userId));
+  const pct = (a) => (a.total > 0 ? Math.round((a.score / a.total) * 100) : 0);
+  const last = mine[mine.length - 1];
+  return {
+    myAttempts: mine.length,
+    myBestPercent: mine.length ? Math.max(...mine.map(pct)) : null,
+    myLastPercent: last ? pct(last) : null,
+    myLastAt: last ? last.completedAt : null,
+    canAttempt: (t.questions || []).length > 0 && (t.allowMultipleAttempts !== false || mine.length === 0),
+  };
+}
+const isTrainingManager = (req) => ["admin", "formateur"].includes(req.user.role);
+
 /** GET /training — User: list visible trainings */
 router.get("/", async (req, res) => {
   try {
@@ -150,8 +165,13 @@ router.get("/", async (req, res) => {
         { targetUsers: userId },
       ],
     };
-    const items = await Training.find(q).select("-pdfData -attempts -starts -questions.imageData").sort({ createdAt: -1 }).lean();
-    res.json(items);
+    const items = await Training.find(q).select("-pdfData -starts -questions.imageData -attempts.answers").sort({ createdAt: -1 }).lean();
+    res.json(items.map((t) => {
+      const info = myAttemptInfo(t, userId);
+      // Les bonnes réponses ne quittent pas le serveur
+      const questions = (t.questions || []).map(({ correctIndex, ...rest }) => rest);
+      return { ...t, questions, attempts: undefined, ...info };
+    }));
   } catch (err) {
     console.error("GET /training error:", err);
     res.status(500).json({ message: "Erreur." });
@@ -203,9 +223,11 @@ router.post("/", permit("admin", "formateur"), async (req, res) => {
 /** GET /training/:id — Get full training detail */
 router.get("/:id", async (req, res) => {
   try {
-    const t = await Training.findById(req.params.id).select("-attempts -starts").lean();
+    const t = await Training.findById(req.params.id).select("-starts -attempts.answers").lean();
     if (!t) return res.status(404).json({ message: "Formation introuvable." });
-    res.json(t);
+    const info = myAttemptInfo(t, req.user.id || req.user._id);
+    const questions = isTrainingManager(req) ? t.questions : (t.questions || []).map(({ correctIndex, ...rest }) => rest);
+    res.json({ ...t, questions, attempts: undefined, ...info });
   } catch (err) {
     res.status(500).json({ message: "Erreur." });
   }
@@ -270,6 +292,11 @@ router.post("/:id/start", async (req, res) => {
     const mongoose = require("mongoose");
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: "ID invalide." });
     const userId = req.user.id || req.user._id;
+    const t = await Training.findById(req.params.id).select("allowMultipleAttempts attempts.user").lean();
+    if (!t) return res.status(404).json({ message: "Formation introuvable." });
+    if (t.allowMultipleAttempts === false && (t.attempts || []).some((a) => String(a.user) === String(userId))) {
+      return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé." });
+    }
     await Training.updateOne(
       { _id: req.params.id, "starts.user": { $ne: userId } },
       { $push: { starts: { user: userId, startedAt: new Date() } } }
@@ -305,8 +332,14 @@ router.post("/:id/attempt", async (req, res) => {
     const percent = total > 0 ? Math.round((score / total) * 100) : 0;
     const threshold = Number.isFinite(t.passThreshold) ? t.passThreshold : 80;
 
-    t.attempts.push({ user: req.user.id || req.user._id, answers, score, total, completedAt: new Date() });
-    await t.save();
+    const attempt = { user: req.user.id || req.user._id, answers, score, total, completedAt: new Date() };
+    // Écriture atomique : en tentative unique, la condition empêche un double envoi simultané
+    const cond = { _id: t._id };
+    if (t.allowMultipleAttempts === false) cond["attempts.user"] = { $ne: attempt.user };
+    const upd = await Training.updateOne(cond, { $push: { attempts: attempt } });
+    if (!upd.modifiedCount) {
+      return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé." });
+    }
 
     res.json({ score, total, percent, passed: percent >= threshold, threshold });
   } catch (err) {

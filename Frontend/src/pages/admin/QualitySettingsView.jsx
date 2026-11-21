@@ -4,6 +4,7 @@ import Card from "./components/Card.jsx";
 import MultiSelect from "../../components/MultiSelect.jsx";
 import { VISIBILITY_SCOPES, EDIT_SCOPES, ROLE_LABELS, resetClosureCodesCache } from "../../utils/evalMeta.js";
 import Select from "../../ui/Select.jsx";
+import ObjectivesEditor from "./ObjectivesEditor.jsx";
 
 const ROLE_OPTS = Object.entries(ROLE_LABELS).filter(([k]) => k !== "admin").map(([value, label]) => ({ value, label }));
 const SAMPLE_OPTS = [
@@ -234,6 +235,7 @@ export default function QualitySettingsView() {
         <RefList title="Projets" path="projects" fields={[{ key: "name", label: "Nom du projet" }, { key: "description", label: "Description" }]} onChanged={loadAll} />
         <RefList title="Contrats" path="contracts" fields={[{ key: "name", label: "Contrat (ex. Orange)" }, { key: "project", label: "Projet" }]} onChanged={loadAll} />
       </div>
+      <RefList title="Activités (par contrat)" path="activities" fields={[{ key: "name", label: "Activité (ex. Activité technique)" }, { key: "contract", label: "Contrat (ex. Bytel)" }]} onChanged={loadAll} />
       <RefList title="Codes de clôture" path="closure-codes" fields={[{ key: "code", label: "Code" }, { key: "label", label: "Libellé" }, { key: "contract", label: "Contrat (vide = tous)" }]} onChanged={resetClosureCodesCache} />
 
       {d && settings && (
@@ -282,6 +284,8 @@ export default function QualitySettingsView() {
           </div>
         </Card>
       )}
+
+      <ObjectivesEditor />
 
       <Card title="Objectifs mensuels d'évaluations (par agent, mois d'appel)">
         <div style={{ fontSize: "0.82rem", color: "var(--muted)", marginBottom: 8 }}>

@@ -66,6 +66,8 @@ const ScoreSchema = new mongoose.Schema(
     closureCode: { type: String, default: "", trim: true, maxlength: 120 },
     callDirection: { type: String, enum: ["", "inbound", "outbound"], default: "" },
     sample: { type: mongoose.Schema.Types.ObjectId, ref: "Sample", default: null },
+    // Mois de prime concerné (AAAA-MM) — remplace le « sens d'appel » hors calibrage
+    primeMonth: { type: String, default: "", match: /^(\d{4}-(0[1-9]|1[0-2]))?$/ },
 
     // Photographie du périmètre de l'agent au moment de l'évaluation (exports / historique)
     cellAtEvaluation: { type: String, default: "" },

@@ -6,6 +6,7 @@ import KpiCard, { fmtRate, toneFor, currentMonth } from "../../components/KpiCar
 import { exportToXlsx } from "../admin/components/exportXlsx.js";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import Select from "../../ui/Select.jsx";
+import ObjectivesProgress from "./ObjectivesProgress.jsx";
 
 const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
 const monthLabel = (m) => { const [y, mm] = String(m || "").split("-"); return y ? `${MONTH_NAMES[Number(mm) - 1]} ${y.slice(2)}` : m; };
@@ -79,7 +80,7 @@ export default function CQProgressView() {
 
       <div className="card filters-card" style={{ marginBottom: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, alignItems: "end" }}>
-          <label className="label">Mois d'appel<input className="input" type="month" value={endMonth} onChange={(e) => e.target.value && setEndMonth(e.target.value)} /></label>
+          <label className="label">Mois<input className="input" type="month" value={endMonth} onChange={(e) => e.target.value && setEndMonth(e.target.value)} /></label>
           <label className="label">Tendance
             <Select className="input" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
               <option value={3}>3 mois</option><option value={6}>6 mois</option><option value={12}>12 mois</option>
@@ -88,6 +89,8 @@ export default function CQProgressView() {
           <PerimeterFilters value={perim} onChange={setPerim} />
         </div>
       </div>
+
+      <ObjectivesProgress month={endMonth} />
 
       {err && <div className="card" style={{ padding: 12, color: "var(--danger)", background: "var(--danger-bg)", marginBottom: 12 }}>{err}</div>}
       {loading && !data && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>Chargement…</div>}

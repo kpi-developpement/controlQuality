@@ -10,7 +10,7 @@ const fmtFull = (d) => { if (!d) return "—"; const dt = new Date(d); return is
 const uid = () => Math.random().toString(36).slice(2);
 
 export default function TrainingPage() {
-  const [tab, setTab] = useState("list"); // list, history, stats
+  const [tab, setTab] = useState("list"); // list (formations), quiz, history, stats
   const [trainings, setTrainings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -57,11 +57,26 @@ export default function TrainingPage() {
   async function openTraining(id) {
     try { const r = await api.get(`/training/${id}`); setSelected(r.data); setQuizMode(false); setQuizResult(null); setQuizAnswers((r.data?.questions || []).map(() => -1)); } catch {}
   }
+  async function startQuiz() {
+    if (!selected?._id) return;
+    setErr("");
+    try {
+      await api.post(`/training/${selected._id}/start`, {}, { toast: false });
+    } catch (e) {
+      if (e?.response?.status === 403) {
+        setQuizResult({ blocked: true, blockedMsg: e.response.data?.message || "Quiz déjà passé." });
+        return;
+      }
+    }
+    setQuizMode(true); setQuizResult(null); setQuizAnswers((selected.questions || []).map(() => -1));
+  }
   async function submitQuiz() {
     if (!selected?._id) return; setSubmitting(true); setErr("");
     try {
       const res = await api.post(`/training/${selected._id}/attempt`, { answers: quizAnswers });
       setQuizResult(res.data);
+      setSelected((cur) => cur ? { ...cur, myAttempts: (cur.myAttempts || 0) + 1, myLastPercent: res.data?.percent, canAttempt: cur.allowMultipleAttempts !== false } : cur);
+      loadList();
     } catch (e) {
       const msg = e?.response?.data?.message || "Erreur.";
       if (e?.response?.status === 403) {
@@ -76,7 +91,10 @@ export default function TrainingPage() {
 
   // Form helpers
   function resetForm() { setForm({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "" }); setPdfFile(null); }
-  function openCreate() { resetForm(); setEditing(null); setCreating(true); setMsg(""); setErr(""); }
+  function openCreate(kind = "formation") {
+    resetForm(); setEditing(null); setCreating(true); setMsg(""); setErr("");
+    if (kind === "quiz") setForm((f) => ({ ...f, questions: [{ _lid: uid(), question: "", imageData: "", options: ["", ""], correctIndex: 0 }] }));
+  }
   function openEdit(t) {
     setForm({ title: t.title || "", description: t.description || "", pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "", category: t.category || "", roles: t.roles || [], targetCells: t.targetCells || [], targetUsers: (t.targetUsers || []).map((u) => typeof u === "string" ? u : u._id || u), questions: (t.questions || []).map((q) => ({ ...q, _lid: uid() })), allowMultipleAttempts: t.allowMultipleAttempts !== false, passThreshold: Number.isFinite(t.passThreshold) ? t.passThreshold : 80, dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : "" });
     setEditing(t); setCreating(true); setMsg(""); setErr("");
@@ -114,6 +132,9 @@ export default function TrainingPage() {
     exportToXlsx(`Resultats_${(results.title || "quiz").replace(/\s+/g, "_")}.xlsx`, rows);
   }
 
+  const quizList = trainings.filter((t) => (t.questions || []).length > 0);
+  const formationsList = trainings.filter((t) => !!(t.pdfUrl || t.pdfData || t.videoUrl || (t.questions || []).length === 0));
+
   // ==================== VIEWER ====================
   if (selected) {
     return (
@@ -124,7 +145,9 @@ export default function TrainingPage() {
             <div style={{ color: "var(--muted)", fontSize: "0.875rem", marginTop: 2 }}>{selected.description || ""}{selected.category ? ` • ${selected.category}` : ""}</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(selected.questions || []).length > 0 && !quizMode && !quizResult && <button className="btn" onClick={() => { setQuizMode(true); setQuizResult(null); setQuizAnswers((selected.questions || []).map(() => -1)); api.post(`/training/${selected._id}/start`, {}, { toast: false }).catch(() => {}); }}><Ico n="edit" /> Quiz ({selected.questions.length})</button>}
+            {(selected.questions || []).length > 0 && !quizMode && !quizResult && (selected.canAttempt === false && !canManage()
+              ? <span className="badge badge--warning" style={{ alignSelf: "center" }}><Ico n="lock" /> Quiz déjà passé{selected.myLastPercent !== null && selected.myLastPercent !== undefined ? ` — ${selected.myLastPercent}%` : ""}</span>
+              : <button className="btn" onClick={startQuiz}><Ico n="edit" /> {selected.myAttempts ? "Repasser le quiz" : "Passer le quiz"} ({selected.questions.length})</button>)}
             {canManage() && !quizMode && !quizResult && <button className="btn btn--ghost" onClick={() => { setSelected(null); openEdit(selected); }}><Ico n="pencil" /> Modifier</button>}
             <button className="btn btn--ghost" onClick={() => setSelected(null)}><Ico n="arrowL" /> Retour</button>
           </div>
@@ -263,20 +286,24 @@ export default function TrainingPage() {
   }
 
   // ==================== MAIN VIEW WITH TABS ====================
+
   return (
     <div className="page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
-          <div className="page-title"><Ico n="book" /> Formations</div>
-          <div style={{ color: "var(--muted)", fontSize: "0.875rem", marginTop: 2 }}>Documents, quiz et suivi des connaissances</div>
+          <div className="page-title"><Ico n="book" /> Formations &amp; Quiz</div>
+          <div style={{ color: "var(--muted)", fontSize: "0.875rem", marginTop: 2 }}>Documents de formation, quiz et suivi des connaissances</div>
         </div>
-        {canManage() && <button className="btn" onClick={openCreate}>+ Créer</button>}
+        {canManage() && (tab === "quiz"
+          ? <button className="btn" onClick={() => openCreate("quiz")}><Ico n="plus" /> Nouveau quiz</button>
+          : <button className="btn" onClick={() => openCreate("formation")}><Ico n="plus" /> Nouvelle formation</button>)}
       </div>
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "2px solid var(--border)", paddingBottom: 0 }}>
         {[
-          { key: "list", label: "Formations" },
+          { key: "list", label: `Formations (${formationsList.length})` },
+          { key: "quiz", label: `Quiz (${quizList.length})` },
           { key: "history", label: "Mon historique" },
           ...(canManage() ? [{ key: "stats", label: "Statistiques" }] : []),
         ].map((t) => (
@@ -290,11 +317,13 @@ export default function TrainingPage() {
       {err && <div className="card" style={{ padding: 12, color: "var(--danger)", background: "var(--danger-bg)", marginBottom: 12, fontWeight: 600, fontSize: "0.85rem" }}>{err}</div>}
 
       {/* TAB: LIST */}
-      {tab === "list" && (
-        loading ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Chargement…</div>
-          : !trainings.length ? <div className="card" style={{ padding: 40, textAlign: "center" }}><div style={{ fontSize: "2.5rem", marginBottom: 8 }}><Ico n="book" /></div><div style={{ fontWeight: 700 }}>Aucune formation</div></div>
+      {(tab === "list" || tab === "quiz") && (() => {
+        const isQuizTab = tab === "quiz";
+        const list = isQuizTab ? quizList : formationsList;
+        return loading ? <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Chargement…</div>
+          : !list.length ? <div className="card" style={{ padding: 40, textAlign: "center" }}><div style={{ fontSize: "2.5rem", marginBottom: 8 }}><Ico n={isQuizTab ? "edit" : "book"} /></div><div style={{ fontWeight: 700 }}>{isQuizTab ? "Aucun quiz" : "Aucune formation"}</div></div>
             : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
-              {trainings.map((t) => (
+              {list.map((t) => (
                 <div key={t._id} className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: "0.95rem" }}>{t.title}</div>{t.description && <div style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: 2 }}>{t.description.slice(0, 100)}</div>}</div>
@@ -305,6 +334,7 @@ export default function TrainingPage() {
                     {(t.questions || []).length > 0 && <span className="badge badge--primary" style={{ fontSize: "0.72rem" }}><Ico n="edit" /> {t.questions.length} Q</span>}
                     {(t.questions || []).length > 0 && <span className="badge badge--muted" style={{ fontSize: "0.72rem" }}>Seuil: {t.passThreshold ?? 80}%</span>}
                     {(t.questions || []).length > 0 && t.allowMultipleAttempts === false && <span className="badge badge--warning" style={{ fontSize: "0.72rem" }}>1 tentative</span>}
+                    {!canManage() && (t.questions || []).length > 0 && t.myAttempts > 0 && <span className="badge badge--success" style={{ fontSize: "0.72rem" }}><Ico n="check" /> Passé — {t.myLastPercent}%</span>}
                     {(t.pdfUrl || t.pdfData) && <span className="badge badge--muted" style={{ fontSize: "0.72rem" }}><Ico n="file" /> PDF</span>}
                     {t.videoUrl && <span className="badge badge--primary" style={{ fontSize: "0.72rem" }}><Ico n="video" /> Vidéo</span>}
                     <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{fmtDate(t.createdAt)}</span>
@@ -317,15 +347,15 @@ export default function TrainingPage() {
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
-                    <button className="btn btn--sm" onClick={() => openTraining(t._id)}>Consulter</button>
+                    <button className="btn btn--sm" onClick={() => openTraining(t._id)}>{isQuizTab ? (canManage() ? "Aperçu" : t.canAttempt === false ? "Voir" : "Passer le quiz") : "Consulter"}</button>
                     {canManage() && <button className="btn btn--ghost btn--sm" onClick={() => openEdit(t)}><Ico n="pencil" /> Modifier</button>}
                     {canManage() && (t.questions || []).length > 0 && <button className="btn btn--ghost btn--sm" onClick={() => loadResults(t._id)}>Résultats</button>}
                     {getUser()?.role === "admin" && <button className="btn btn--ghost btn--sm" style={{ color: "var(--danger)" }} onClick={async () => { if (!window.confirm(`Supprimer la formation "${t.title}" ?`)) return; try { await api.delete(`/training/${t._id}`); loadList(); } catch {} }}><Ico n="trash" /></button>}
                   </div>
                 </div>
               ))}
-            </div>
-      )}
+            </div>;
+      })()}
 
       {/* TAB: HISTORY */}
       {tab === "history" && (

@@ -115,6 +115,7 @@ mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB connectée");
+    require("./utils/ensureReferentials").ensureReferentials();
     server.listen(PORT, () => {
       console.log(`🚀 Serveur lancé sur le port ${PORT}`);
     });
