@@ -1,9 +1,10 @@
 // src/api.js
+import { API_URL } from "./backendUrl.js";
 import axios from "axios";
 import { toast } from "./toast/toastBus";
 
 // BACKEND URL (with /api)
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://my-backend:5000/api";
+const API_BASE_URL = API_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,

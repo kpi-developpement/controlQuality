@@ -1,9 +1,9 @@
 // src/socket.js
+import { BACKEND_ORIGIN } from "./backendUrl.js";
 import { io } from "socket.io-client";
 
 // BACKEND base without /api for socket.io default path (/socket.io)
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://my-backend:5000/api";
-const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+const SOCKET_URL = BACKEND_ORIGIN;
 
 let socket = null;
 

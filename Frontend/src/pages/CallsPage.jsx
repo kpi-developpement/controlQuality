@@ -1,8 +1,9 @@
+import { BACKEND_ORIGIN } from "../backendUrl.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Ico from "../ui/Ico.jsx";
 import Select from "../ui/Select.jsx";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://10.10.10.61:5000";
+const API_BASE = BACKEND_ORIGIN;
 
 function formatSeconds(seconds) {
   if (!Number.isFinite(seconds)) return "00:00";

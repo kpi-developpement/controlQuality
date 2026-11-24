@@ -1,3 +1,4 @@
+import { BACKEND_ORIGIN } from "../backendUrl.js";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import api from "../api.js";
 import { exportToXlsx } from "./admin/components/exportXlsx.js";
@@ -156,7 +157,7 @@ export default function TrainingPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Video player */}
             {selected.videoUrl && (() => {
-              const vUrl = selected.videoUrl.startsWith("/uploads/") ? `${api.defaults.baseURL?.replace("/api", "") || "http://my-backend:5000"}${selected.videoUrl}` : selected.videoUrl;
+              const vUrl = selected.videoUrl.startsWith("/uploads/") ? `${BACKEND_ORIGIN}${selected.videoUrl}` : selected.videoUrl;
               return (
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: 10 }}><Ico n="video" /> Vidéo</div>
