@@ -129,18 +129,7 @@ router.get("/stats/global", permit("admin", "formateur"), async (req, res) => {
 });
 
 /** Tentatives de l'utilisateur courant (sans exposer celles des autres). */
-function myAttemptInfo(t, userId) {
-  const mine = (t.attempts || []).filter((a) => String(a.user) === String(userId));
-  const pct = (a) => (a.total > 0 ? Math.round((a.score / a.total) * 100) : 0);
-  const last = mine[mine.length - 1];
-  return {
-    myAttempts: mine.length,
-    myBestPercent: mine.length ? Math.max(...mine.map(pct)) : null,
-    myLastPercent: last ? pct(last) : null,
-    myLastAt: last ? last.completedAt : null,
-    canAttempt: (t.questions || []).length > 0 && (t.allowMultipleAttempts !== false || mine.length === 0),
-  };
-}
+const { quizAttemptInfo: myAttemptInfo } = require("../utils/evalRules");
 const isTrainingManager = (req) => ["admin", "formateur"].includes(req.user.role);
 
 /** GET /training — User: list visible trainings */
@@ -295,7 +284,7 @@ router.post("/:id/start", async (req, res) => {
     const t = await Training.findById(req.params.id).select("allowMultipleAttempts attempts.user").lean();
     if (!t) return res.status(404).json({ message: "Formation introuvable." });
     if (t.allowMultipleAttempts === false && (t.attempts || []).some((a) => String(a.user) === String(userId))) {
-      return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé." });
+      return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé.", canAttempt: false });
     }
     await Training.updateOne(
       { _id: req.params.id, "starts.user": { $ne: userId } },
@@ -318,7 +307,7 @@ router.post("/:id/attempt", async (req, res) => {
 
     if (t.allowMultipleAttempts === false) {
       if ((t.attempts || []).some((a) => String(a.user) === userId)) {
-        return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé." });
+        return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé.", canAttempt: false });
       }
     }
 
@@ -338,7 +327,7 @@ router.post("/:id/attempt", async (req, res) => {
     if (t.allowMultipleAttempts === false) cond["attempts.user"] = { $ne: attempt.user };
     const upd = await Training.updateOne(cond, { $push: { attempts: attempt } });
     if (!upd.modifiedCount) {
-      return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé." });
+      return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé.", canAttempt: false });
     }
 
     res.json({ score, total, percent, passed: percent >= threshold, threshold });

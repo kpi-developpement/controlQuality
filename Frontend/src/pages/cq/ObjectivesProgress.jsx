@@ -14,6 +14,7 @@ function Progress({ v }) {
     <div className="obj-cell" title={`${v.done} réalisé(s) sur ${v.target} — dont ${v.mine} par vous`}>
       <div className="obj-cell__nums">{v.done} / {v.target} <small>· {v.rate?.toFixed(0)} %</small></div>
       <div className="obj-bar" style={{ "--tone": toneOf(v.rate) }}><span style={{ width: `${pct}%` }} /></div>
+      <div className="obj-cell__left">{v.done >= v.target ? "Objectif atteint" : `Reste ${v.target - v.done}`}</div>
     </div>
   );
 }
@@ -74,7 +75,8 @@ export default function ObjectivesProgress({ month }) {
                 <div className="muted" style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" }}>{a.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 800, margin: "4px 0" }}>{v.done}<span className="muted" style={{ fontSize: 14 }}> / {v.target || "—"}</span></div>
                 {v.target ? <div className="obj-bar" style={{ "--tone": toneOf(rate) }}><span style={{ width: `${Math.min(100, rate)}%` }} /></div> : <div className="muted" style={{ fontSize: 12 }}>Pas d'objectif</div>}
-                {isMine && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Dont vous : {v.mine}</div>}
+                {v.target > 0 && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{v.done >= v.target ? "Objectif atteint" : `Reste à faire : ${v.target - v.done}`} · {rate?.toFixed(0)} %</div>}
+                {isMine && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Dont vous : {v.mine}</div>}
               </div>
             );
           })}

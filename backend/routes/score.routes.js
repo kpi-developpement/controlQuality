@@ -24,7 +24,7 @@ const {
 const auth = require("../middleware/auth");
 const permit = require("../middleware/roles");
 
-const PRIME_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const { PRIME_MONTH_RE, primeMonthError, callDateError } = require("../utils/evalRules");
 const router = express.Router();
 
 // Toutes les routes /scores/* nécessitent une authentification
@@ -257,21 +257,13 @@ router.post(
       const closure = String(closureCode || "").trim().slice(0, 120);
       const direction = normalizeDirection(callDirection);
 
-      // Mois de prime obligatoire (sauf calibrage) ; date d'appel obligatoire et non future
+      // Mois de prime obligatoire (sauf calibrage) ; date d'appel obligatoire et différente du jour J
       const prime = String(primeMonth || "").trim();
-      if (prime && !PRIME_MONTH_RE.test(prime)) {
-        return res.status(400).json({ message: "Mois de prime invalide (format AAAA-MM)." });
-      }
-      if (evalType !== "calibration" && !prime) {
-        return res.status(400).json({ message: "Le mois concerné par la prime est obligatoire." });
-      }
-      const callDay = callDate ? new Date(callDate) : null;
-      if (!callDay || Number.isNaN(callDay.getTime())) {
-        return res.status(400).json({ message: "La date de l'appel est obligatoire." });
-      }
-      if (callDay.getTime() > Date.now()) {
-        return res.status(400).json({ message: "La date de l'appel ne peut pas être dans le futur." });
-      }
+      const primeErr = primeMonthError(prime, evalType);
+      if (primeErr) return res.status(400).json({ message: primeErr, code: "PRIME_MONTH" });
+      const callErr = callDateError(callDate, evalType);
+      if (callErr) return res.status(400).json({ message: callErr, code: "CALL_DATE" });
+      const callDay = new Date(callDate);
 
       const scope = await getScope(req);
       if (!(await isPilotInScope(scope, finalPilotId))) {
@@ -1685,6 +1677,12 @@ router.patch(
           : null;
       }
       if (callDate !== undefined) {
+        // Date d'appel modifiée : mêmes règles qu'à la création (obligatoire, différente du jour J)
+        const { callDayKey } = require("../utils/evalRules");
+        if (callDayKey(callDate) !== callDayKey(score.callDate)) {
+          const callErr = callDateError(callDate, normalizeType(score.evaluationType));
+          if (callErr) return res.status(400).json({ message: callErr, code: "CALL_DATE" });
+        }
         score.callDate = callDate ? new Date(callDate) : null;
       }
       if (interactionDate !== undefined) {

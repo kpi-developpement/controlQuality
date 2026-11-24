@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
 import Ico from "../../../ui/Ico.jsx";
+import { primeMonthText } from "../../../utils/evalMeta.js";
 
 // Couleurs des notations : NA gris, PC/C vert, PNC/NC orange, NP rouge
-const TONE = { NA: "na", PC: "ok", C: "ok", PNC: "warn", NC: "warn", NP: "bad" };
+// NA gris (cliquable), PC/C vert, PNC orange, NP/NC rouge
+const TONE = { NA: "na", PC: "ok", C: "ok", PNC: "warn", NC: "bad", NP: "bad" };
 
 function notationOptionsFor(items) {
   const hasPresence = (items || []).some((it) => ["PC", "PNC", "NP"].includes(String(it?.status || "").toUpperCase()));
@@ -68,6 +70,8 @@ export default function EditScoreModal({ score, onClose, onSave, isSaving, readO
         </div>
 
         <div className="scorem__meta">
+          {score?.callDate && <span className="badge badge--muted">Appel du {fmtDate(score.callDate)}</span>}
+          {score?.primeMonth && <span className="badge badge--primary">Prime : {primeMonthText(score.primeMonth)}</span>}
           <span className={`badge ${pct >= 80 ? "badge--success" : pct >= 50 ? "badge--warning" : "badge--danger"}`}>Score {pct.toFixed(1)} %</span>
           <span className={`badge ${score?.pilotValidated ? "badge--success" : "badge--muted"}`}>
             {score?.pilotValidated ? `Signée le ${fmtDate(score?.pilotValidatedAt)}` : "Non signée"}

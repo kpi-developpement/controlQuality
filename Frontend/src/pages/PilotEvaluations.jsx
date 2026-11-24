@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import api from "../api.js";
 import PeriodFilter from "../components/PeriodFilter.jsx";
 import { initialPeriod, inPeriod } from "../utils/period.mjs";
-import { typeLabel, directionLabel } from "../utils/evalMeta.js";
+import { typeLabel, directionLabel, primeMonthText } from "../utils/evalMeta.js";
 import Ico from "../ui/Ico.jsx";
 import Select from "../ui/Select.jsx";
 
@@ -128,6 +128,7 @@ export default function PilotEvaluations() {
                 { k: "Évaluateur", v: selectedEval.evaluatorName || selectedEval.evaluator?.name || selectedEval.cq?.name || selectedEval.evaluatorRole || "—" },
                 { k: "Rôle évaluateur", v: selectedEval.evaluatorRole || selectedEval.evaluator?.role || "—" },
                 { k: "Prime", v: selectedEval.pickingPrime ? "Oui" : "Non" },
+                { k: "Mois de la prime", v: primeMonthText(selectedEval.primeMonth) || "—" },
                 { k: "EPS", v: selectedEval.eps || "—" },
                 { k: "Durée", v: selectedEval.callDuration || "—" },
                 { k: "Score", v: `${Number(selectedEval.total || 0).toFixed(1)}%` },

@@ -37,7 +37,7 @@ export default function ObjectivesEditor() {
   const [cells, setCells] = useState([]);
   const [rows, setRows] = useState({});
   const [dirty, setDirty] = useState({});
-  const [group, setGroup] = useState("cq");
+  const [shownActs, setShownActs] = useState(() => OBJ_ACTIVITIES.map((a) => a.key));
   const [contract, setContract] = useState("");
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
@@ -60,10 +60,10 @@ export default function ObjectivesEditor() {
     .filter((c) => (!contract || c.contract === contract) && (!q || c.name.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => (a.contract || "").localeCompare(b.contract || "") || a.name.localeCompare(b.name)), [cells, contract, q]);
 
-  const setVal = (cell, key, value) => {
+  const setVal = (cell, key, value, grp) => {
     setRows((prev) => {
       const r = prev[cell];
-      const next = key === "base" ? { ...r, base: value } : { ...r, [group]: { ...r[group], [key]: value } };
+      const next = key === "base" ? { ...r, base: value } : { ...r, [grp]: { ...r[grp], [key]: value } };
       return { ...prev, [cell]: next };
     });
     setDirty((d) => ({ ...d, [cell]: true }));
@@ -90,7 +90,9 @@ export default function ObjectivesEditor() {
   }
 
   const dirtyCount = Object.values(dirty).filter(Boolean).length;
-  const g = OBJ_GROUPS.find((x) => x.key === group);
+  // Matrice : chaque type de tâche est décliné par population (CQ | Référent | Management)
+  const acts = OBJ_ACTIVITIES.filter((a) => shownActs.includes(a.key));
+  const toggleAct = (k) => setShownActs((cur) => (cur.includes(k) ? (cur.length > 1 ? cur.filter((x) => x !== k) : cur) : OBJ_ACTIVITIES.map((a) => a.key).filter((x) => x === k || cur.includes(x))));
 
   return (
     <Card
@@ -102,23 +104,26 @@ export default function ObjectivesEditor() {
         Le suivi est visible dans <b>Avancement CQ</b>.
       </div>
       <div className="obj-toolbar">
-        <div className="seg" role="tablist" aria-label="Population">
-          {OBJ_GROUPS.map((x) => (
-            <button key={x.key} type="button" role="tab" aria-selected={group === x.key} className={group === x.key ? "seg__btn is-on" : "seg__btn"} onClick={() => setGroup(x.key)} title={x.hint}>{x.label}</button>
+        <div className="obj-chips" role="group" aria-label="Types de tâches affichés">
+          {OBJ_ACTIVITIES.map((a) => (
+            <button key={a.key} type="button" aria-pressed={shownActs.includes(a.key)} className={shownActs.includes(a.key) ? "obj-chip is-on" : "obj-chip"} onClick={() => toggleAct(a.key)}>{a.label}</button>
           ))}
         </div>
-        <Select className="input" value={contract} onChange={(e) => setContract(e.target.value)} style={{ maxWidth: 220 }}>
-          <option value="">Toutes les activités</option>
+        <Select className="input" value={contract} onChange={(e) => setContract(e.target.value)} style={{ maxWidth: 200 }}>
+          <option value="">Tous les contrats</option>
           {contracts.map((c) => <option key={c} value={c}>{c}</option>)}
         </Select>
-        <input className="input" placeholder="Rechercher une cellule…" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
+        <input className="input" placeholder="Rechercher une cellule…" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 220 }} />
       </div>
-      <div style={{ overflowX: "auto" }}>
+      <div className="obj-scroll">
         <table className="data-table obj-table">
           <thead>
             <tr>
-              <th>Activité</th><th>Cellule</th><th>Base</th>
-              {OBJ_ACTIVITIES.map((a) => <th key={a.key} className="num">{a.label} {g.label}</th>)}
+              <th rowSpan={2}>Activité</th><th rowSpan={2} className="obj-sticky">Cellule</th><th rowSpan={2}>Base</th>
+              {acts.map((a) => <th key={a.key} colSpan={OBJ_GROUPS.length} className="num obj-grouphead">{a.label}</th>)}
+            </tr>
+            <tr>
+              {acts.flatMap((a) => OBJ_GROUPS.map((g) => <th key={a.key + g.key} className="num obj-subhead" title={g.hint}>{g.key === "referent" ? "Référent" : g.label}</th>))}
             </tr>
           </thead>
           <tbody>
@@ -127,24 +132,24 @@ export default function ObjectivesEditor() {
               if (!r) return null;
               return (
                 <tr key={c.name} className={dirty[c.name] ? "is-dirty" : undefined}>
-                  <td>{r.contract || "—"}</td>
-                  <td style={{ fontWeight: 600 }}>{c.name}</td>
+                  <td><div style={{ fontWeight: 600 }}>{c.activity || "—"}</div><div className="muted" style={{ fontSize: 11 }}>{r.contract || "Sans contrat"}</div></td>
+                  <td className="obj-sticky" style={{ fontWeight: 600 }}>{c.name}</td>
                   <td>
                     <Select className="input input--sm" value={r.base} onChange={(e) => setVal(c.name, "base", e.target.value)}>
                       <option value="cell">Par cellule</option>
                       <option value="agent">Par agent</option>
                     </Select>
                   </td>
-                  {OBJ_ACTIVITIES.map((a) => (
-                    <td key={a.key} className="num">
+                  {acts.flatMap((a) => OBJ_GROUPS.map((g) => (
+                    <td key={a.key + g.key} className={`num obj-cellgrp obj-cellgrp--${g.key}`}>
                       <input className="input obj-num" type="number" min="0" max="100000" inputMode="numeric" aria-label={`${a.label} ${g.label} — ${c.name}`}
-                        value={r[group][a.key]} onChange={(e) => setVal(c.name, a.key, e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))} />
+                        value={r[g.key][a.key]} onChange={(e) => setVal(c.name, a.key, e.target.value === "" ? "" : Math.max(0, Number(e.target.value)), g.key)} />
                     </td>
-                  ))}
+                  )))}
                 </tr>
               );
             })}
-            {!shown.length && <tr><td colSpan={8} style={{ color: "var(--muted)" }}>Aucune cellule.</td></tr>}
+            {!shown.length && <tr><td colSpan={3 + acts.length * OBJ_GROUPS.length} style={{ color: "var(--muted)" }}>Aucune cellule.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -113,3 +113,19 @@
 .pwd-input .input{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em}
 .pwd-saved{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--success-bg);color:var(--success);font-weight:600;font-size:.88rem}
 .pwd-saved code{background:var(--panel);color:var(--text);padding:3px 8px;border-radius:8px;font-size:.9rem;user-select:all}
+
+/* --- Objectifs : matrice tâches × populations --- */
+.obj-chips{display:flex;flex-wrap:wrap;gap:6px}
+.obj-chip{border:1px solid var(--border);background:var(--panel);color:var(--text-secondary);font-weight:700;font-size:.8rem;padding:6px 12px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s,border-color .2s}
+.obj-chip:hover{border-color:var(--primary)}
+.obj-chip.is-on{background:var(--primary-bg);color:var(--primary);border-color:var(--primary-border,var(--primary))}
+.obj-chip:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.obj-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:14px}
+.obj-table{margin:0}
+.obj-table th.obj-grouphead{border-left:2px solid var(--border-strong);text-transform:none;letter-spacing:0;font-size:.82rem;color:var(--text)}
+.obj-table th.obj-subhead{font-size:.7rem;white-space:nowrap}
+.obj-table .obj-cellgrp--cq,.obj-table th.obj-subhead:nth-child(3n+1){border-left:2px solid var(--border-strong)}
+.obj-table .obj-num{width:64px}
+.obj-table .obj-sticky{position:sticky;left:0;background:var(--panel);z-index:1}
+.obj-table tr.is-dirty td.obj-sticky{background:color-mix(in srgb,var(--warning) 8%,var(--panel))}
+.obj-cell__left{font-size:.72rem;color:var(--muted);font-weight:600}
