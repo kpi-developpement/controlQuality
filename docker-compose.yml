@@ -1,3 +1,23 @@
+# KCQ — déploiement serveur (backend + frontend + MongoDB)
+#
+# Mise à jour (la base et les fichiers déposés sont conservés) :
+#   rm -rf controlQuality && git clone https://github.com/kpi-developpement/controlQuality.git
+#   cd controlQuality
+#   docker compose down
+#   docker compose up -d --build
+#
+# Ne JAMAIS lancer « docker compose down -v » : -v supprime la base de données.
+#
+# Secrets (hors dépôt Git) : fichier /home/webserver/kcq.env (autre chemin : variable KCQ_ENV_FILE), par ex. :
+#   JWT_SECRET=...
+#   DB_PASSWORD=...
+# Facultatif (build du frontend) : adresses du backend vues par le navigateur, à exporter dans le shell
+# avant « up » si les valeurs par défaut du code ne conviennent pas :
+#   export VITE_API_URL=http://my-backend:5000/api VITE_API_BASE_URL=http://my-backend:5000
+
+# Nom de projet fixe : mêmes conteneurs, même réseau et mêmes volumes quel que soit le nom du dossier cloné
+name: projet_kcq
+
 services:
   backend:
     container_name: my-backend
@@ -7,30 +27,36 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    env_file:
+      - ${KCQ_ENV_FILE:-/home/webserver/kcq.env}
     environment:
       NODE_ENV: production
       PORT: 5000
       MONGO_URI: mongodb://mongo:27017/KyntusCQ
-      JWT_SECRET: your_secret_here
       RECORDINGS_MODE: mysql
       DB_HOST: 10.10.10.55
       DB_PORT: 3306
       DB_NAME: enregistrement_audio
       DB_USER: kpi
-      DB_PASSWORD: "${DB_PASSWORD}"
       PICKING_AUDIO_DIR: /app/audio_mails
       AUDIO_BASE_PATH: /app/audio_mails
     depends_on:
       - mongo
     volumes:
       - /mnt/nas_enrg/audio_mails:/app/audio_mails:ro
+      # Vidéos / fichiers des formations : conservés entre les mises à jour
+      - kcq-uploads:/app/uploads
     networks:
       - internal_net
+
   frontend:
     container_name: my-frontend
     build:
       context: ./Frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     restart: unless-stopped
     ports:
       - "5173:5173"
@@ -38,6 +64,7 @@ services:
       - backend
     networks:
       - internal_net
+
   mongo:
     image: mongo:4.4
     container_name: mongo-db
@@ -46,8 +73,14 @@ services:
       - mongo-data:/data/db
     networks:
       - internal_net
+
 networks:
   internal_net:
     driver: bridge
+
 volumes:
+  # Noms fixes = les volumes déjà présents sur le serveur (la base actuelle est réutilisée)
   mongo-data:
+    name: projet_kcq_mongo-data
+  kcq-uploads:
+    name: projet_kcq_uploads

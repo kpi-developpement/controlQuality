@@ -2,13 +2,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-ENV NODE_ENV=development
+# Adresses du backend vues par le navigateur, figées au build par Vite.
+# Vides = valeurs par défaut du code (http://my-backend:5000/api).
+ARG VITE_API_URL=""
+ARG VITE_API_BASE_URL=""
+ENV VITE_API_URL=$VITE_API_URL \
+    VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 COPY package*.json ./
 
 RUN npm config set registry https://registry.npmjs.org/ \
-    && npm install --include=dev \
-    && npx vite --version
+    && npm install --include=dev
 
 COPY . .
 
