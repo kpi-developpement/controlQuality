@@ -139,6 +139,7 @@ router.patch("/profile", auth, async (req, res) => {
         return res.status(400).json({ message: "Le nouveau mot de passe doit contenir au moins 6 caractères." });
       }
       user.passwordHash = await bcrypt.hash(newPassword, 10);
+      user.passwordEnc = require("../utils/passwordVault").sealPassword(newPassword);
     }
 
     await user.save();

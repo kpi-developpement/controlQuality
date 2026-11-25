@@ -75,7 +75,7 @@ export default function CQProgressView() {
 
   return (
     <div className="page">
-      <PageHeader title="Avancement CQ" subtitle="État d'avancement des évaluations par mois d'appel : réalisé, restant, couverture et tendance."
+      <PageHeader title="Avancement écoutes" subtitle="État d'avancement des évaluations par mois d'appel : réalisé, restant, couverture et tendance."
         right={<button className="btn" type="button" onClick={onExport} disabled={loading || !data}>Exporter Excel</button>} />
 
       <div className="card filters-card" style={{ marginBottom: 12 }}>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import Ico from "../../ui/Ico.jsx";
-import { gridAppliesToCell, isClassified } from "../../utils/gridScope.js";
+import { gridAppliesToCell, isClassified, gridContracts, gridActivities } from "../../utils/gridScope.js";
 
 const USAGE_LABELS = { evaluation: "Évaluation", calibration: "Calibrage", sample: "Échantillons", all: "Tous usages" };
 const NO_ACTIVITY = "__none";
@@ -14,8 +14,11 @@ export default function GridBrowser({ grids, contracts, activities, cells, path,
   const [q, setQ] = useState("");
 
   const cellsOf = (contract, activity) => cells.filter((c) => (c.contract || "") === contract && (activity === undefined || (activity === NO_ACTIVITY ? !c.activity : c.activity === activity)));
-  const gridsInContract = (name) => grids.filter((g) => g.contract === name || cellsOf(name).some((c) => gridAppliesToCell(g, c)));
-  const gridsInActivity = (contract, activity) => grids.filter((g) => (activity !== NO_ACTIVITY && g.activity === activity && (!g.contract || g.contract === contract)) || cellsOf(contract, activity).some((c) => gridAppliesToCell(g, c)));
+  const gridsInContract = (name) => grids.filter((g) => gridContracts(g).includes(name) || cellsOf(name).some((c) => gridAppliesToCell(g, c)));
+  const gridsInActivity = (contract, activity) => grids.filter((g) => {
+    const ctrs = gridContracts(g);
+    return (activity !== NO_ACTIVITY && gridActivities(g).includes(activity) && (!ctrs.length || ctrs.includes(contract))) || cellsOf(contract, activity).some((c) => gridAppliesToCell(g, c));
+  });
   const unclassified = useMemo(() => grids.filter((g) => !isClassified(g)), [grids]);
 
   const contractNames = useMemo(() => {
@@ -37,7 +40,7 @@ export default function GridBrowser({ grids, contracts, activities, cells, path,
   if (path.cell) crumbs.push({ label: path.cell, to: path });
 
   const search = q.trim().toLowerCase();
-  const searchResults = search ? grids.filter((g) => `${g.name} ${g.description || ""} ${g.contract || ""} ${g.activity || ""} ${(g.cells || []).join(" ")}`.toLowerCase().includes(search)) : null;
+  const searchResults = search ? grids.filter((g) => `${g.name} ${g.description || ""} ${gridContracts(g).join(" ")} ${gridActivities(g).join(" ")} ${(g.cells || []).join(" ")}`.toLowerCase().includes(search)) : null;
 
   let listGrids = [];
   let listTitle = "";
@@ -111,7 +114,8 @@ function GridList({ title, grids, onEdit, onDelete, canDelete }) {
       <div className="grid-rows">
         {grids.map((g) => {
           const items = (g.items || []).filter((i) => i.type === "item").length;
-          const place = g.cells?.length ? g.cells.join(", ") : g.activity ? `Toute l'activité ${g.activity}` : g.contract ? `Tout le contrat ${g.contract}` : "Non classée";
+          const acts = gridActivities(g), ctrs = gridContracts(g);
+          const place = g.cells?.length ? g.cells.join(", ") : acts.length ? `Activités : ${acts.join(", ")}` : ctrs.length ? `Contrats : ${ctrs.join(", ")}` : "Non classée";
           return (
             <div key={g._id} className="grid-row">
               <div style={{ minWidth: 0 }}>

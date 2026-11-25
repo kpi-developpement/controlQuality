@@ -49,19 +49,25 @@ export default function ObjectivesProgress({ month }) {
     return t;
   }, [rows, g]);
   const isMine = data?.myGroup === g;
+  // Chaque rôle a sa propre vue (pas de bascule) ; l'admin peut consulter toutes les populations
+  const lockedGroup = !!data?.myGroup;
 
   return (
     <div className="card" style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         <div>
-          <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Ico n="target" /> Mes objectifs — {monthText(data?.month || month)}</h3>
-          <div className="muted" style={{ fontSize: 13 }}>Réalisé (date de réalisation) par rapport aux objectifs fixés par cellule dans Paramètres qualité.</div>
+          <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Ico n="target" /> Objectifs {OBJ_GROUPS.find((x) => x.key === g)?.label || ""} — {monthText(data?.month || month)}</h3>
+          <div className="muted" style={{ fontSize: 13 }}>
+            {lockedGroup ? "Vue commune à tous les utilisateurs de votre rôle" : "Vue par population"}
+            {lockedGroup && ["referent", "management"].includes(g) ? ", limitée à vos cellules affectées" : ""}.
+            Objectif = objectif par agent (Paramètres qualité) × agents actifs de la cellule ; réalisé à la date de réalisation.
+          </div>
         </div>
-        <div className="seg" role="tablist" aria-label="Population">
+        {!lockedGroup && <div className="seg" role="tablist" aria-label="Population">
           {OBJ_GROUPS.map((x) => (
             <button key={x.key} type="button" role="tab" aria-selected={g === x.key} className={g === x.key ? "seg__btn is-on" : "seg__btn"} onClick={() => setGroup(x.key)} title={x.hint}>{x.label}</button>
           ))}
-        </div>
+        </div>}
       </div>
       {err && <p style={{ color: "var(--danger)" }}>{err}</p>}
       {!err && data && !rows.length && <p className="muted">Aucun objectif n'est encore fixé pour vos cellules (Paramètres qualité → Objectifs mensuels par cellule).</p>}
@@ -88,7 +94,7 @@ export default function ObjectivesProgress({ month }) {
               {rows.map((r) => (
                 <tr key={r.cell}>
                   <td>{r.contract || "—"}</td>
-                  <td style={{ fontWeight: 600 }}>{r.cell}{r.base === "agent" && <div className="muted" style={{ fontSize: 11 }}>par agent × {r.activeAgents}</div>}</td>
+                  <td style={{ fontWeight: 600 }}>{r.cell}<div className="muted" style={{ fontSize: 11 }}>{r.activeAgents} agent{r.activeAgents > 1 ? "s" : ""} actif{r.activeAgents > 1 ? "s" : ""}</div></td>
                   {OBJ_ACTIVITIES.map((a) => <td key={a.key}><Progress v={r.groups?.[g]?.[a.key]} /></td>)}
                 </tr>
               ))}

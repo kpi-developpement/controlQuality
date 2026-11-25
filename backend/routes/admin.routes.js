@@ -84,11 +84,12 @@ const permit = require("../middleware/roles");
 const Sample = require("../models/Sample");
 const { getScope, userFilterForScope, pilotScopeClause } = require("../utils/scope");
 
+const { sealPassword, openPassword } = require("../utils/passwordVault");
 const router = express.Router();
 
 /* ---- Contrat Orange : champs de périmètre des profils ---- */
 const VALID_ROLES = ["admin", "cq", "pilote", "management", "formateur", "supervision", "referent", "superviseur", "cdp"];
-const VISIBILITY_SCOPES = ["", "cell", "project", "contract", "all", "self", "team", "line"];
+const VISIBILITY_SCOPES = ["", "cell", "project", "contract", "all", "self", "team", "line", "pole"];
 const EDIT_SCOPES = ["", "none", "own", "perimeter"];
 
 /** Rôle saisi (formulaire / import Excel) → valeur technique. « Pilote », « CQ », « Manager »… acceptés. */
@@ -111,6 +112,10 @@ function pickScopeFields(body) {
   if (body.extraCells !== undefined) {
     const arr = Array.isArray(body.extraCells) ? body.extraCells : String(body.extraCells || "").split(",");
     out.extraCells = [...new Set(arr.map((c) => String(c || "").trim()).filter(Boolean))].slice(0, 50);
+  }
+  if (body.poles !== undefined) {
+    const arr = Array.isArray(body.poles) ? body.poles : String(body.poles || "").split(",");
+    out.poles = [...new Set(arr.map((c) => String(c || "").trim()).filter(Boolean))].slice(0, 50);
   }
   if (body.visibilityScope !== undefined) {
     const v = String(body.visibilityScope || "");
@@ -242,6 +247,7 @@ router.post(
         email,
         role,
         passwordHash,
+        passwordEnc: sealPassword(password),
         active: true,
         cell: cell || "",
         ...scopeFields,
@@ -282,6 +288,7 @@ router.post("/pilots", permit("admin", "formateur"), async (req, res) => {
     const user = await User.create({
       name, email, role: "pilote", active: true,
       passwordHash: await bcrypt.hash(password, 10),
+      passwordEnc: sealPassword(password),
       cell: String(req.body.cell || "").trim(),
       ...fields,
     });
@@ -452,6 +459,7 @@ router.post(
             email,
             role,
             passwordHash,
+            passwordEnc: sealPassword(password),
             active: true,
             cell: cell || "",
             ...bulkScope,
@@ -593,6 +601,7 @@ router.patch(
 
       if (password && password.trim().length > 0) {
         update.passwordHash = await bcrypt.hash(password, 10);
+        update.passwordEnc = sealPassword(password.trim() === password ? password : password);
       }
 
       const user = await User.findByIdAndUpdate(id, update, {
@@ -786,11 +795,16 @@ router.get(
 function gridPlacement(body, partial = false) {
   const out = {};
   const clean = (v) => String(v || "").trim().slice(0, 120);
-  if (!partial || body.contract !== undefined) out.contract = clean(body.contract);
-  if (!partial || body.activity !== undefined) out.activity = clean(body.activity);
-  if (!partial || body.cells !== undefined) {
-    out.cells = [...new Set((Array.isArray(body.cells) ? body.cells : []).map(clean).filter(Boolean))].slice(0, 200);
+  const list = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map(clean).filter(Boolean))].slice(0, 200);
+  // Sélection multiple (contracts / activities) ; ancien format (contract / activity) toujours accepté
+  for (const [many, one] of [["contracts", "contract"], ["activities", "activity"]]) {
+    if (!partial || body[many] !== undefined || body[one] !== undefined) {
+      const values = body[many] !== undefined ? list(body[many]) : list([body[one]]);
+      out[many] = values;
+      out[one] = values[0] || "";
+    }
   }
+  if (!partial || body.cells !== undefined) out.cells = list(body.cells);
   return out;
 }
 
@@ -1662,5 +1676,25 @@ router.get("/supervision", permit("admin"), async (req, res) => {
   }
 });
 
+
+/**
+ * GET /admin/users/:id/password — Admin : mot de passe actuel (copie chiffrée), action journalisée.
+ */
+router.get("/users/:id/password", permit("admin"), async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(String(req.params.id))) return res.status(400).json({ message: "Identifiant invalide." });
+    const user = await User.findById(req.params.id).select("+passwordEnc name email").lean();
+    if (!user) return res.status(404).json({ message: "Utilisateur introuvable." });
+    const password = openPassword(user.passwordEnc);
+    await logAudit(req, { action: "VIEW_PASSWORD", targetType: "user", targetId: user._id, metadata: { email: user.email, available: !!password } });
+    if (!password) {
+      return res.json({ available: false, message: "Mot de passe non consultable : il a été défini avant l'activation de cette fonction. Générez-en un nouveau pour pouvoir le consulter ensuite." });
+    }
+    res.json({ available: true, password });
+  } catch (err) {
+    console.error("GET /admin/users/:id/password error:", err);
+    res.status(500).json({ message: "Erreur serveur." });
+  }
+});
 
 module.exports = router;

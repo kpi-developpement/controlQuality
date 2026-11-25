@@ -158,12 +158,14 @@ export default function EvaluationsView() {
   }, [gridsRaw]);
 
   const cq = useMemo(() => {
-    const arr = scoresRaw.filter((s) => String(s?.evaluatorRole || s?.role || "") === "cq");
+    // CQ + formateurs (les formateurs ont les accès CQ)
+    const arr = scoresRaw.filter((s) => ["cq", "formateur"].includes(String(s?.evaluatorRole || s?.role || "")));
     return arr.map((x) => normalizeRow(x, "cq", gridsById));
   }, [scoresRaw, gridsById]);
 
   const mg = useMemo(() => {
-    const arr = scoresRaw.filter((s) => String(s?.evaluatorRole || s?.role || "") === "management");
+    // Management + rôles calqués (superviseur, référent technique, chef de projet)
+    const arr = scoresRaw.filter((s) => ["management", "superviseur", "referent", "cdp"].includes(String(s?.evaluatorRole || s?.role || "")));
     return arr.map((x) => normalizeRow(x, "management", gridsById));
   }, [scoresRaw, gridsById]);
 

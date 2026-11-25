@@ -20,6 +20,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Copie chiffrée (AES-256-GCM) du mot de passe, consultable par l'admin. Jamais renvoyée par défaut.
+    passwordEnc: { type: String, default: "", select: false },
 
     role: {
       type: String,
@@ -45,11 +47,13 @@ const userSchema = new mongoose.Schema(
     contract: { type: String, default: "", trim: true },
     // Cellules supplémentaires autorisées explicitement ("sauf autorisation spécifique")
     extraCells: { type: [String], default: [] },
+    // Pôle(s) = activité(s) affectée(s) (Superviseur, Référent technique). Vide = activités de ses cellules.
+    poles: { type: [String], default: [] },
     // Périmètre de consultation : "" = valeur par défaut du rôle
     // cell | project | contract | all | self
     visibilityScope: {
       type: String,
-      enum: ["", "cell", "project", "contract", "all", "self", "team", "line"],
+      enum: ["", "cell", "project", "contract", "all", "self", "team", "line", "pole"],
       default: "",
     },
     // Périmètre de modification : "" = comportement historique du rôle

@@ -1,19 +1,25 @@
-// src/utils/gridScope.js — rangement des grilles : Contrat → Activité → Cellule(s)
+// src/utils/gridScope.js — rangement des grilles : Contrat(s) → Activité(s) → Cellule(s)
 
-export const isClassified = (g) => !!(g?.contract || g?.activity || (g?.cells || []).length);
+/** Valeurs multiples d'une grille, compatibles avec l'ancien format (champ texte unique). */
+export const gridContracts = (g) => (g?.contracts?.length ? g.contracts : g?.contract ? [g.contract] : []);
+export const gridActivities = (g) => (g?.activities?.length ? g.activities : g?.activity ? [g.activity] : []);
+
+export const isClassified = (g) => !!(gridContracts(g).length || gridActivities(g).length || (g?.cells || []).length);
 
 /**
  * La grille s'applique-t-elle à cette cellule ?
  * - cellules listées : seulement celles-ci
- * - sinon activité renseignée : toutes les cellules de l'activité
- * - sinon contrat renseigné : toutes les cellules du contrat
+ * - sinon activités renseignées : toutes les cellules de ces activités (dans les contrats choisis, s'il y en a)
+ * - sinon contrats renseignés : toutes les cellules de ces contrats
  */
 export function gridAppliesToCell(g, cell) {
   if (!g || !cell) return false;
   const cells = g.cells || [];
   if (cells.length) return cells.includes(cell.name);
-  if (g.activity) return g.activity === (cell.activity || "") && (!g.contract || g.contract === (cell.contract || ""));
-  if (g.contract) return g.contract === (cell.contract || "");
+  const acts = gridActivities(g);
+  const ctrs = gridContracts(g);
+  if (acts.length) return acts.includes(cell.activity || "") && (!ctrs.length || ctrs.includes(cell.contract || ""));
+  if (ctrs.length) return ctrs.includes(cell.contract || "");
   return false;
 }
 

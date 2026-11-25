@@ -16,10 +16,10 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const { getSetting } = require("./settings");
 
-// referent : ses pilotes directs ; superviseur : pilotes de ses référents ; cdp : son activité (projet)
+// Superviseur et Référent technique : tout leur pôle (activité affectée) ; Chef de projet : tout son contrat
 const ROLE_DEFAULT = {
   admin: "all", cq: "all", formateur: "all", pilote: "self", management: "cell", supervision: "cell",
-  referent: "team", superviseur: "line", cdp: "project",
+  referent: "pole", superviseur: "pole", cdp: "contract",
 };
 const LEGACY_DEFAULT = { ...ROLE_DEFAULT, management: "all" };
 const DENY = Object.freeze({ _id: { $in: [] } });
@@ -45,6 +45,10 @@ function matchesScopeFields(scope, doc) {
   if (!scope || scope.unrestricted) return true;
   const d = doc || {};
   const val = (k) => String(d[k] || "").trim();
+  if (scope.mode === "pole") {
+    const cells = scope.poleCells || [];
+    return cells.length > 0 && cells.some((c) => cellRegex(c).test(String(d.cell || "")));
+  }
   if (scope.mode === "cell") {
     if (!scope.cells.length) return false;
     if (!scope.cells.some((c) => cellRegex(c).test(String(d.cell || "")))) return false;
@@ -78,6 +82,7 @@ function computeScope(user, tokenUser, enforced) {
     mode,
     unrestricted: mode === "all",
     cells: uniq([user && user.cell, ...((user && user.extraCells) || [])]),
+    poles: uniq((user && user.poles) || []),
     project: String((user && user.project) || "").trim(),
     contract: String((user && user.contract) || "").trim(),
     editScope: String((user && user.editScope) || ""),
@@ -104,6 +109,12 @@ function userFilterForScope(scope) {
       if (scope.project) and.push(sameOrEmpty("project", scope.project));
       if (scope.contract) and.push(sameOrEmpty("contract", scope.contract));
       return { $and: and };
+    }
+    case "pole": {
+      // Pôle : toutes les cellules des activités affectées
+      const cells = scope.poleCells || [];
+      if (!cells.length) return DENY;
+      return { $or: cells.map((c) => ({ cell: cellRegex(c) })) };
     }
     case "project":
       return scope.project ? { ...extra } : DENY;
@@ -133,16 +144,34 @@ function sampleFilterForScope(scope) {
   return f; // mêmes noms de champs : cell, project, contract
 }
 
+/** Cellules du pôle : cellules des activités affectées (à défaut : activités de ses propres cellules). */
+async function poleCellsFor(scope) {
+  const Cell = require("../models/Cell");
+  let poles = scope.poles || [];
+  if (!poles.length && scope.cells.length) {
+    const own = await Cell.find({ name: { $in: scope.cells } }).select("activity").lean();
+    poles = uniq(own.map((c) => c.activity));
+  }
+  if (!poles.length) return [...scope.cells]; // pas d'activité renseignée : ses cellules
+  const q = { activity: { $in: poles } };
+  if (scope.contract) q.$or = [{ contract: scope.contract }, { contract: "" }, { contract: null }];
+  const cells = await Cell.find(q).select("name").lean();
+  return uniq([...cells.map((c) => c.name), ...scope.cells]);
+}
+
 async function getScope(req) {
   if (req._kcqScope) return req._kcqScope;
   const tokenUser = req.user || {};
   const id = tokenUser.id || tokenUser._id;
   let user = null;
   if (id && mongoose.Types.ObjectId.isValid(String(id))) {
-    user = await User.findById(id).select("role cell project contract extraCells visibilityScope editScope active").lean();
+    user = await User.findById(id).select("role cell project contract extraCells poles visibilityScope editScope active").lean();
   }
   const enforced = await getSetting("accessScopeEnforced");
   req._kcqScope = computeScope(user, tokenUser, enforced);
+  if (req._kcqScope.mode === "pole") {
+    req._kcqScope.poleCells = await poleCellsFor(req._kcqScope);
+  }
   if (req._kcqScope.mode === "line" && user) {
     req._kcqScope.teamLeads = (await User.distinct("_id", { role: "referent", superviseur: user._id })).map(String);
   }

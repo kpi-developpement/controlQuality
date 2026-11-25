@@ -85,6 +85,7 @@ export default function KpiDashboard() {
       ["Échantillons en attente ou standby", d.samplesWaiting?.total, "", "", `Statuts : ${(d.samplesWaiting?.statuses || []).join(", ")}`],
     ].map(([Indicateur, Valeur, Numérateur, Dénominateur, Formule]) => ({ Indicateur, Valeur: Valeur ?? "", Numérateur: Numérateur ?? "", Dénominateur: Dénominateur ?? "", Formule }));
     exportToXlsx(`Indicateurs_qualite_${fromMonth}_${toMonth}.xlsx`, {
+      "Indicateurs (formules)": (d.clientIndicators || []).map((x) => ({ Indicateur: x.label, "Taux (%)": x.rate ?? "", Numérateur: x.num, Dénominateur: x.den, Formule: x.formula })),
       Indicateurs: ind,
       [`Ventilation ${DIMENSIONS.find((x) => x.value === dimension)?.label || ""}`.slice(0, 31)]: rows.map((r) => ({
         [DIMENSIONS.find((x) => x.value === dimension)?.label || "Clé"]: r.label, ...(dimension === "pilot" ? { Cellule: r.cell || "" } : {}),
@@ -115,6 +116,15 @@ export default function KpiDashboard() {
       </div>
 
       {err && <div className="card" style={{ padding: 12, color: "var(--danger)", background: "var(--danger-bg)", marginBottom: 12 }}>{err}</div>}
+
+      {(d.clientIndicators || []).length > 0 && (
+        <div className="kpi-formulas">
+          {d.clientIndicators.map((x) => (
+            <KpiCard key={x.key} title={x.label} value={fmtRate(x.rate)} tone={toneFor(x.rate, ...(x.key.includes("Contestation") ? [90, 75, true] : [80, 50]))}
+              detail={`${x.num} / ${x.den}`} formula={x.formula} />
+          ))}
+        </div>
+      )}
 
       {loading && !data ? (
         <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>Calcul des indicateurs…</div>

@@ -37,7 +37,7 @@ function auth(req, res, next) {
 
 // middleware strict management
 function allowManagement(req, res, next) {
-  if (!req.user || req.user.role !== "management") {
+  if (!req.user || !["management", "superviseur", "referent", "cdp"].includes(req.user.role)) {
     return res
       .status(403)
       .json({ message: "Accès réservé au management." });

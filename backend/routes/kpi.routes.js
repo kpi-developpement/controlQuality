@@ -24,6 +24,8 @@ const router = express.Router();
 router.use(auth);
 
 const READERS = ["admin", "cq", "formateur", "management", "supervision", "superviseur", "referent", "cdp"];
+// Onglet « Indicateurs qualité » : Admin et Superviseur uniquement
+const INDICATOR_READERS = ["admin", "superviseur", "supervision"];
 const isId = (v) => !!v && mongoose.Types.ObjectId.isValid(String(v));
 const csvIds = (v) => (v ? String(v).split(",").map((x) => x.trim()).filter(isId).map((x) => new mongoose.Types.ObjectId(x)) : []);
 const str = (v) => String(v || "").trim().slice(0, 120);
@@ -120,7 +122,7 @@ function handle(res, err, label) {
  * Query : dateFrom, dateTo, cell, project, contract, pilotId, evaluatorId
  * Les 7 indicateurs du besoin §2 + échantillons en attente (§3.3).
  */
-router.get("/summary", permit(...READERS), async (req, res) => {
+router.get("/summary", permit(...INDICATOR_READERS), async (req, res) => {
   try {
     const period = resolvePeriod(req.query);
     const settings = await getSettings();
@@ -137,7 +139,7 @@ router.get("/summary", permit(...READERS), async (req, res) => {
     const cAnd = [{ createdAt: { $gte: period.from, $lte: period.to } }];
     if (pop.pilotFilterIds) cAnd.push({ pilot: { $in: pop.pilotFilterIds } });
     if (evaluators.length) cAnd.push({ coach: { $in: evaluators } });
-    const coachings = await Coaching.find({ $and: cAnd }).select("pilotAcknowledged status createdAt").lean();
+    const coachings = await Coaching.find({ $and: cAnd }).select("pilot pilotAcknowledged status createdAt").lean();
     const from12 = new Date(period.to);
     from12.setUTCMonth(from12.getUTCMonth() - 12);
     const c12And = [{ createdAt: { $gt: from12, $lte: period.to } }];
@@ -167,6 +169,12 @@ router.get("/summary", permit(...READERS), async (req, res) => {
     const doneForCoverage = scores.filter((s) => agentIds.has(String(s.pilot))).length;
     const evaluatedAgents = new Set(scores.filter((s) => agentIds.has(String(s.pilot))).map((s) => String(s.pilot))).size;
 
+    // --- Calibrages (mois d'appel) : validations et contestations ---
+    const calAnd = [callRangeClause(period.from, period.to), typeClause(["calibration"])];
+    if (pop.pilotFilterIds) calAnd.push({ pilot: { $in: pop.pilotFilterIds } });
+    if (evaluators.length) calAnd.push({ evaluator: { $in: evaluators } });
+    const calibrations = await Score.find({ $and: calAnd }).select("pilot contested contestedAt contestComment reevaluatedAt pilotValidated").lean();
+
     // --- Échantillons en attente / standby ---
     const sf = sampleFilterForScope(pop.scope);
     const sAnd = [{ status: { $in: settings.sampleWaitingStatuses } }];
@@ -176,7 +184,29 @@ router.get("/summary", permit(...READERS), async (req, res) => {
     if (req.query.project) sAnd.push({ project: str(req.query.project) });
     const waitingSamples = await Sample.aggregate([{ $match: { $and: sAnd } }, { $group: { _id: "$status", n: { $sum: 1 } } }]);
 
+    // Indicateurs qualité avec les formules du client (liste des besoins, nov. 2026)
+    const evalVal = K.evaluationValidation(scores);
+    const evalCont = K.evaluationContestation(scores);
+    const calVal = K.evaluationValidation(calibrations);
+    const calCont = K.evaluationContestation(calibrations);
+    const coachVal = K.coachingValidation(coachings);
+    const quizC = K.quizCompletion(trainings, quizUsers);
+    const coachedAgents = new Set(coachings.map((c) => String(c.pilot)).filter((id) => agentIds.has(id))).size;
+    const ind = (key, label, formula, num, den) => ({ key, label, formula, num, den, rate: K.rate(num, den) });
+    const clientIndicators = [
+      ind("coachingValidation", "Taux de validation des coachings", "Coachings validés / coachings reçus", coachVal.validated, coachVal.received),
+      ind("evaluationValidation", "Taux de validation des évaluations", "Évaluations validées par l'agent / évaluations reçues", evalVal.validated, evalVal.received),
+      ind("calibrationValidation", "Taux de validation des calibrages", "Calibrages validés par l'agent / calibrages reçus", calVal.validated, calVal.received),
+      ind("evaluationContestation", "Taux de contestation des évaluations", "Évaluations contestées / évaluations reçues", evalCont.contested, evalCont.received),
+      ind("calibrationContestation", "Taux de contestation des calibrages", "Calibrages contestés / calibrages reçus", calCont.contested, calCont.received),
+      ind("quizCompletion", "Taux de passation des quiz", "Quiz finalisés / quiz actifs attribués", quizC.finalized, quizC.assignments),
+      ind("coverage", "Taux de couverture des évaluations", "Agents actifs évalués / total des agents actifs", evaluatedAgents, pop.agents.length),
+      ind("coachingRate", "Taux de coaching", "Agents actifs coachés / total des agents actifs", coachedAgents, pop.agents.length),
+      ind("connection", "Taux de connexion à l'application", "Utilisateurs connectés / total des utilisateurs", distinctLogged.length, usageIds.length),
+    ];
+
     res.json({
+      clientIndicators,
       period: { from: period.from, to: period.to, months: period.months, dateBasis: "call" },
       population: { activeAgents: pop.agents.length },
       evaluations: { total: scores.length, avgPercent, byType: K.countByType(scores) },
@@ -227,7 +257,7 @@ router.get("/summary", permit(...READERS), async (req, res) => {
  * GET /api/kpi/breakdown?dimension=evaluator|pilot|cell|project|contract|month|type
  * Volumes, moyenne, contestations et validations par dimension (identification des contestations).
  */
-router.get("/breakdown", permit(...READERS), async (req, res) => {
+router.get("/breakdown", permit(...INDICATOR_READERS), async (req, res) => {
   try {
     const dimension = String(req.query.dimension || "cell");
     if (!["evaluator", "pilot", "cell", "project", "contract", "month", "type"].includes(dimension)) {
@@ -363,7 +393,7 @@ router.get("/cq-progress", permit(...READERS), async (req, res) => {
  * Avancement des tâches de chaque population (CQ, référents, management) par rapport aux
  * objectifs fixés par cellule dans Paramètres qualité. Comptage par date de réalisation.
  */
-const GROUP_OF_ROLE = { cq: "cq", formateur: "cq", referent: "referent", management: "management", superviseur: "management" };
+const GROUP_OF_ROLE = { cq: "cq", formateur: "formateur", referent: "referent", management: "management", superviseur: "management", cdp: "management" };
 const ACTIVITY_OF_TYPE = { standard: "evaluations", picking: "pickings", sample: "samples", calibration: "calibrations" };
 router.get("/objectives-progress", permit(...READERS), async (req, res) => {
   try {
@@ -380,7 +410,7 @@ router.get("/objectives-progress", permit(...READERS), async (req, res) => {
     const cellDocs = await Cell.find({ name: { $in: objectives.map((o) => o.cell) } }).select("name contract").lean();
     const contractOf = new Map(cellDocs.map((c) => [c.name, c.contract || ""]));
     objectives = objectives.map((o) => ({ ...o, contract: contractOf.has(o.cell) ? contractOf.get(o.cell) : o.contract }));
-    if (!scope.unrestricted && ["cell", "project", "contract"].includes(scope.mode)) {
+    if (!scope.unrestricted && ["cell", "project", "contract", "pole"].includes(scope.mode)) {
       objectives = objectives.filter((o) => matchesScopeFields(scope, { cell: o.cell, contract: o.contract }));
     }
     const cells = objectives.map((o) => o.cell);
@@ -401,7 +431,7 @@ router.get("/objectives-progress", permit(...READERS), async (req, res) => {
     const roleOf = new Map(actors.map((u) => [String(u._id), u.role]));
 
     const blank = () => Object.fromEntries(QualityObjective.ACTIVITIES.map((a) => [a, { done: 0, mine: 0 }]));
-    const done = new Map(cells.map((c) => [c, { cq: blank(), referent: blank(), management: blank() }]));
+    const done = new Map(cells.map((c) => [c, Object.fromEntries(QualityObjective.GROUPS.map((g) => [g, blank()]))]));
     const add = (cell, actorId, activity) => {
       const bucket = done.get(cell);
       const group = GROUP_OF_ROLE[roleOf.get(String(actorId))];
@@ -416,7 +446,8 @@ router.get("/objectives-progress", permit(...READERS), async (req, res) => {
     for (const c of coachings) add(cellOfPilot.get(String(c.pilot)), c.coach, "coachings");
 
     const rows = objectives.map((o) => {
-      const mult = o.base === "agent" ? (activeAgents[o.cell] || 0) : 1;
+      // Objectif fixé par agent : volume attendu = objectif × agents actifs de la cellule
+      const mult = activeAgents[o.cell] || 0;
       const groups = {};
       for (const g of QualityObjective.GROUPS) {
         groups[g] = {};
@@ -426,7 +457,7 @@ router.get("/objectives-progress", permit(...READERS), async (req, res) => {
           groups[g][a] = { target, done: d.done, mine: d.mine, rate: target ? Math.round((d.done / target) * 1000) / 10 : null };
         }
       }
-      return { cell: o.cell, contract: o.contract || "", base: o.base, activeAgents: activeAgents[o.cell] || 0, groups };
+      return { cell: o.cell, contract: o.contract || "", base: "agent", perAgent: Object.fromEntries(QualityObjective.GROUPS.map((g) => [g, o[g] || {}])), activeAgents: activeAgents[o.cell] || 0, groups };
     });
     res.json({ month, myGroup: GROUP_OF_ROLE[req.user.role] || "", rows });
   } catch (err) {

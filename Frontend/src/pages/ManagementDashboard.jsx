@@ -10,6 +10,7 @@ import SamplesPage from "./shared/SamplesPage.jsx";
 import KpiDashboard from "./kpi/KpiDashboard.jsx";
 import ContestationsPage from "./shared/ContestationsPage.jsx";
 import TeamPage from "./shared/TeamPage.jsx";
+import CQProgressView from "./cq/CQProgressView.jsx";
 
 export default function ManagementDashboard({ forcedView, onViewChange, editScoreId }) {
   const view = forcedView || "overview";
@@ -28,6 +29,7 @@ export default function ManagementDashboard({ forcedView, onViewChange, editScor
   if (view === "samples") return <SamplesPage />;
   if (view === "sample_eval") return <NewEvaluationPage title="Évaluation d'échantillon" mode="sample" />;
   if (view === "kpi") return <KpiDashboard />;
+  if (view === "cqprogress") return <CQProgressView />;
 
   if (view === "team") return <TeamPage />;
   if (view === "contestations") return <ContestationsPage />;

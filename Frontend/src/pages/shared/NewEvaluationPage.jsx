@@ -209,7 +209,7 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
     const role = user?.role;
     if (!role) return;
 
-    const view = isCalibration ? "calibrations" : isSampleMode ? "samples" : ["management", "superviseur", "referent"].includes(role) ? "form" : "list";
+    const view = isCalibration ? "calibrations" : isSampleMode ? "samples" : ["management", "superviseur", "referent", "cdp"].includes(role) ? "form" : "list";
     window.dispatchEvent(
       new CustomEvent("kcq:navigate", {
         detail: { role, view },

@@ -243,6 +243,7 @@ export default function UsersStructuresView() {
       extraCells: Array.isArray(editing.extraCells) ? editing.extraCells : [],
       referent: editing.role === "pilote" ? (editing.referent || null) : null,
       superviseur: ["pilote", "referent"].includes(editing.role) ? (editing.superviseur || null) : null,
+      poles: ["superviseur", "referent"].includes(editing.role) && Array.isArray(editing.poles) ? editing.poles : [],
     });
 
     setEditing(null);
@@ -269,6 +270,16 @@ export default function UsersStructuresView() {
       setPwd((p) => ({ ...p, saved: value, show: true }));
       await load();
     } catch { /* toast d'erreur automatique */ }
+  };
+  const showCurrentPassword = async () => {
+    if (!pwd.id) return;
+    setPwd((p) => ({ ...p, loadingCurrent: true }));
+    try {
+      const { data } = await axios.get(`/admin/users/${pwd.id}/password`);
+      setPwd((p) => ({ ...p, current: data, loadingCurrent: false }));
+    } catch {
+      setPwd((p) => ({ ...p, loadingCurrent: false }));
+    }
   };
   const copyPassword = async (v) => {
     try { await navigator.clipboard.writeText(v); toast.success("Mot de passe copié."); } catch { toast.error("Copie impossible : sélectionnez le texte manuellement."); }
@@ -715,7 +726,7 @@ export default function UsersStructuresView() {
           {cells.map((c) => {
             const cellMembers = (users || []).filter((u) => String(u.cell || "").toLowerCase() === String(c.name || "").toLowerCase());
             const pilotes = cellMembers.filter((u) => u.role === "pilote");
-            const managers = cellMembers.filter((u) => u.role === "management");
+            const managers = cellMembers.filter((u) => ["management", "superviseur", "referent", "cdp"].includes(u.role));
             const cqs = cellMembers.filter((u) => u.role === "cq");
             const teams = (c.description || "").split(",").map((t) => t.trim()).filter(Boolean);
 
@@ -844,6 +855,12 @@ export default function UsersStructuresView() {
                       {superviseursList.map((r) => <option key={r._id} value={r._id}>Superviseur : {r.name}</option>)}
                     </Select>
                   )}
+                  {["superviseur", "referent"].includes(editing.role) && (
+                    <Select className="input" multiple value={Array.isArray(editing.poles) ? editing.poles : []} title="Pôle(s) affecté(s)" placeholder="Pôle : activités de ses cellules"
+                      onChange={(e) => setEditing({ ...editing, poles: Array.from(e.target.selectedOptions || []).map((o) => o.value) })}>
+                      {activities.filter((a) => a.active !== false).map((a) => <option key={a._id} value={a.name}>Pôle : {a.name} ({a.contract})</option>)}
+                    </Select>
+                  )}
                   <RefSelect value={editing.project || ""} onChange={(v) => setEditing({ ...editing, project: v })} items={projects} placeholder="Projet (aucun)" />
                   <RefSelect value={editing.contract || ""} onChange={(v) => setEditing({ ...editing, contract: v })} items={contracts} placeholder="Contrat (aucun)" />
                   <Select className="input" value={editing.visibilityScope || ""} onChange={(e) => setEditing({ ...editing, visibilityScope: e.target.value })} title="Périmètre de consultation">
@@ -882,8 +899,20 @@ export default function UsersStructuresView() {
                   <div className="label">Mot de passe actuel</div>
                   <div className="pwd-current">
                     <Ico n="lock" />
-                    <span>••••••••••</span>
-                    <span className="pwd-current__note">Non consultable : les mots de passe sont enregistrés chiffrés (personne ne peut les relire). Définissez-en un nouveau ci-dessous.</span>
+                    {pwd.current?.available
+                      ? <code className="pwd-current__value">{pwd.current.password}</code>
+                      : <span>••••••••••</span>}
+                    {pwd.current?.available ? (
+                      <>
+                        <button type="button" className="iconbtn" title="Copier" aria-label="Copier le mot de passe actuel" onClick={() => copyPassword(pwd.current.password)}><Ico n="copy" /></button>
+                        <button type="button" className="iconbtn" title="Masquer" aria-label="Masquer le mot de passe actuel" onClick={() => setPwd((p) => ({ ...p, current: null }))}><Ico n="eyeOff" /></button>
+                      </>
+                    ) : (
+                      <button type="button" className="btn btn--ghost btn--sm" disabled={pwd.loadingCurrent} onClick={showCurrentPassword}><Ico n="eye" /> {pwd.loadingCurrent ? "Chargement…" : "Afficher"}</button>
+                    )}
+                    <span className="pwd-current__note">
+                      {pwd.current && !pwd.current.available ? pwd.current.message : "Stocké chiffré ; chaque consultation est enregistrée dans le journal d'audit."}
+                    </span>
                   </div>
                 </div>
 

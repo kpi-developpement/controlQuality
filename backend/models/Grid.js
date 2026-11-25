@@ -54,8 +54,11 @@ const GridSchema = new mongoose.Schema(
     callDirection: { type: String, enum: ["", "inbound", "outbound"], default: "" },
 
     // Rangement : Contrat → Activité → Cellule(s). Vide = grille non classée (proposée partout).
+    // contracts / activities : sélection multiple ; contract / activity = 1er élément (compatibilité)
     contract: { type: String, default: "", trim: true },
     activity: { type: String, default: "", trim: true },
+    contracts: { type: [String], default: [] },
+    activities: { type: [String], default: [] },
     cells: { type: [String], default: [] },
 
     // Soft delete: keep grids for historical evaluations

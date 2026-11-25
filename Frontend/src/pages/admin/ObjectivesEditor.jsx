@@ -12,9 +12,10 @@ export const OBJ_ACTIVITIES = [
   { key: "calibrations", label: "Calibrages" },
 ];
 export const OBJ_GROUPS = [
-  { key: "cq", label: "CQ", hint: "CQ et formateurs" },
+  { key: "cq", label: "CQ", hint: "Contrôleurs qualité" },
+  { key: "formateur", label: "Formateur", hint: "Formateurs" },
   { key: "referent", label: "Référent technique", hint: "Référents techniques" },
-  { key: "management", label: "Management", hint: "Management et superviseurs" },
+  { key: "management", label: "Management", hint: "Management, superviseurs et chefs de projet" },
 ];
 
 const emptyCounts = () => Object.fromEntries(OBJ_ACTIVITIES.map((a) => [a.key, 0]));
@@ -24,6 +25,7 @@ const toRow = (cell, doc) => ({
   _id: doc?._id || "",
   base: doc?.base || "cell",
   cq: { ...emptyCounts(), ...(doc?.cq || {}) },
+  formateur: { ...emptyCounts(), ...(doc?.formateur || {}) },
   referent: { ...emptyCounts(), ...(doc?.referent || {}) },
   management: { ...emptyCounts(), ...(doc?.management || {}) },
 });
@@ -37,16 +39,21 @@ export default function ObjectivesEditor() {
   const [cells, setCells] = useState([]);
   const [rows, setRows] = useState({});
   const [dirty, setDirty] = useState({});
+  const [agentCount, setAgentCount] = useState({});
   const [shownActs, setShownActs] = useState(() => OBJ_ACTIVITIES.map((a) => a.key));
   const [contract, setContract] = useState("");
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    const [c, o] = await Promise.all([
+    const [c, o, u] = await Promise.all([
       api.get("/admin/cells").then((r) => r.data).catch(() => []),
       api.get("/referentials/objectives").then((r) => r.data).catch(() => []),
+      api.get("/admin/users").then((r) => r.data).catch(() => []),
     ]);
+    const counts = {};
+    for (const x of Array.isArray(u) ? u : []) if (x.role === "pilote" && x.active !== false && x.cell) counts[x.cell] = (counts[x.cell] || 0) + 1;
+    setAgentCount(counts);
     const list = (Array.isArray(c) ? c : c?.items || []).filter((x) => x.active !== false);
     const byCell = new Map((Array.isArray(o) ? o : []).map((d) => [d.cell, d]));
     setCells(list);
@@ -78,7 +85,7 @@ export default function ObjectivesEditor() {
       const r = rows[name];
       const clean = (o) => Object.fromEntries(OBJ_ACTIVITIES.map((a) => [a.key, Math.max(0, Number(o[a.key]) || 0)]));
       try {
-        await api.put("/referentials/objectives", { cell: name, base: r.base, cq: clean(r.cq), referent: clean(r.referent), management: clean(r.management) }, { toast: false });
+        await api.put("/referentials/objectives", { cell: name, base: "agent", ...Object.fromEntries(OBJ_GROUPS.map((g) => [g.key, clean(r[g.key])])) }, { toast: false });
         ok++;
       } catch (e) {
         toast.error(`${name} : ${e?.response?.data?.message || "enregistrement impossible"}`);
@@ -100,8 +107,8 @@ export default function ObjectivesEditor() {
       right={<button className="btn btn--sm" type="button" onClick={saveAll} disabled={!dirtyCount || saving}>{saving ? "Enregistrement…" : dirtyCount ? `Enregistrer (${dirtyCount})` : "Enregistrer"}</button>}
     >
       <div className="obj-help">
-        Volume attendu chaque mois pour chaque cellule. Base « par cellule » : objectif total de la cellule ; « par agent » : objectif multiplié par le nombre d'agents actifs.
-        Le suivi est visible dans <b>Avancement CQ</b>.
+        Objectif mensuel <b>par agent</b> : le volume attendu de chaque cellule = objectif × nombre d'agents actifs de la cellule.
+        Le suivi est visible dans <b>Avancement écoutes</b>.
       </div>
       <div className="obj-toolbar">
         <div className="obj-chips" role="group" aria-label="Types de tâches affichés">
@@ -119,7 +126,7 @@ export default function ObjectivesEditor() {
         <table className="data-table obj-table">
           <thead>
             <tr>
-              <th rowSpan={2}>Activité</th><th rowSpan={2} className="obj-sticky">Cellule</th><th rowSpan={2}>Base</th>
+              <th rowSpan={2}>Activité</th><th rowSpan={2} className="obj-sticky">Cellule</th><th rowSpan={2} className="num">Agents actifs</th>
               {acts.map((a) => <th key={a.key} colSpan={OBJ_GROUPS.length} className="num obj-grouphead">{a.label}</th>)}
             </tr>
             <tr>
@@ -134,12 +141,7 @@ export default function ObjectivesEditor() {
                 <tr key={c.name} className={dirty[c.name] ? "is-dirty" : undefined}>
                   <td><div style={{ fontWeight: 600 }}>{c.activity || "—"}</div><div className="muted" style={{ fontSize: 11 }}>{r.contract || "Sans contrat"}</div></td>
                   <td className="obj-sticky" style={{ fontWeight: 600 }}>{c.name}</td>
-                  <td>
-                    <Select className="input input--sm" value={r.base} onChange={(e) => setVal(c.name, "base", e.target.value)}>
-                      <option value="cell">Par cellule</option>
-                      <option value="agent">Par agent</option>
-                    </Select>
-                  </td>
+                  <td className="num">{agentCount[c.name] ?? "—"}</td>
                   {acts.flatMap((a) => OBJ_GROUPS.map((g) => (
                     <td key={a.key + g.key} className={`num obj-cellgrp obj-cellgrp--${g.key}`}>
                       <input className="input obj-num" type="number" min="0" max="100000" inputMode="numeric" aria-label={`${a.label} ${g.label} — ${c.name}`}

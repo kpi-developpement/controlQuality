@@ -5,6 +5,7 @@ import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
 import GridBrowser, { NO_ACTIVITY, UNCLASSIFIED } from "./GridBrowser.jsx";
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
+import { gridContracts, gridActivities } from "../../utils/gridScope.js";
 import { useToast } from "../../toast/ToastProvider.jsx";
 const USAGE_LABELS = { evaluation: "Évaluation", calibration: "Calibrage", sample: "Échantillons", all: "Tous usages" };
 
@@ -57,8 +58,8 @@ export default function GridsView() {
       gridType: (g.gridType || "classic"),
       usage: g.usage || "evaluation",
       callDirection: g.callDirection || "",
-      contract: g.contract || "",
-      activity: g.activity || "",
+      contracts: gridContracts(g),
+      activities: gridActivities(g),
       cells: Array.isArray(g.cells) ? g.cells : [],
       rolesAllowed: Array.isArray(g.rolesAllowed) ? g.rolesAllowed : (g.role ? [g.role] : ["cq", "management"]),
       items: ensureIds(g.items || []),
@@ -75,8 +76,8 @@ export default function GridsView() {
       active: true,
       rolesAllowed: ["cq", "management"],
       // Pré-rangement selon l'emplacement courant (Contrat → Activité → Cellule)
-      contract: path.contract && path.contract !== UNCLASSIFIED ? path.contract : "",
-      activity: path.activity && path.activity !== NO_ACTIVITY ? path.activity : "",
+      contracts: path.contract && path.contract !== UNCLASSIFIED ? [path.contract] : [],
+      activities: path.activity && path.activity !== NO_ACTIVITY ? [path.activity] : [],
       cells: path.cell ? [path.cell] : [],
       items: [
         { type: "group", title: "Phase 1", hardFail: false, malusPercent: 0 },
@@ -113,8 +114,8 @@ export default function GridsView() {
       // Contrat Orange : usage (évaluation / calibrage / échantillons) et sens d'appel
       usage: editorGrid.usage || "evaluation",
       callDirection: editorGrid.callDirection || "",
-      contract: editorGrid.contract || "",
-      activity: editorGrid.activity || "",
+      contracts: editorGrid.contracts || [],
+      activities: editorGrid.activities || [],
       cells: editorGrid.cells || [],
     }, { toast: false });
     await load();
@@ -380,25 +381,35 @@ export default function GridsView() {
 
             <div className="grid-place">
               <div className="grid-place__title"><Ico n="mapPin" /> Rangement de la grille</div>
-              <label className="label">Contrat
-                <Select className="input" value={editorGrid.contract || ""} onChange={(e) => setEditorGrid({ ...editorGrid, contract: e.target.value, activity: "", cells: [] })}>
-                  <option value="">Non classée</option>
-                  {[...new Set([...refs.contracts.filter((c) => c.active !== false).map((c) => c.name), ...(editorGrid.contract ? [editorGrid.contract] : [])])].map((n) => <option key={n} value={n}>{n}</option>)}
-                </Select>
-              </label>
-              <label className="label">Activité
-                <Select className="input" value={editorGrid.activity || ""} onChange={(e) => setEditorGrid({ ...editorGrid, activity: e.target.value, cells: [] })} disabled={!editorGrid.contract}>
-                  <option value="">Toutes les activités du contrat</option>
-                  {refs.activities.filter((a) => a.contract === editorGrid.contract && a.active !== false).map((a) => <option key={a._id} value={a.name}>{a.name}</option>)}
-                </Select>
-              </label>
-              <label className="label">Cellule(s)
-                <Select className="input" multiple value={editorGrid.cells || []} disabled={!editorGrid.contract}
-                  onChange={(e) => setEditorGrid({ ...editorGrid, cells: Array.from(e.target.selectedOptions || []).map((o) => o.value) })}>
-                  {refs.cells.filter((c) => (c.contract || "") === editorGrid.contract && (!editorGrid.activity || c.activity === editorGrid.activity)).map((c) => <option key={c._id} value={c.name}>{c.name}</option>)}
-                </Select>
-              </label>
-              <div className="grid-place__hint">Sans cellule choisie, la grille s'applique à toutes les cellules de l'activité (ou du contrat). Lors d'une évaluation, seules les grilles de la cellule de l'agent sont proposées.</div>
+              {(() => {
+                const selCtrs = editorGrid.contracts || [];
+                const selActs = editorGrid.activities || [];
+                const multi = (e) => Array.from(e.target.selectedOptions || []).map((o) => o.value);
+                const ctrNames = [...new Set([...refs.contracts.filter((c) => c.active !== false).map((c) => c.name), ...selCtrs])];
+                const actOpts = refs.activities.filter((a) => a.active !== false && selCtrs.includes(a.contract));
+                const cellOpts = refs.cells.filter((c) => selCtrs.includes(c.contract || "") && (!selActs.length || selActs.includes(c.activity || "")));
+                return <>
+                  <label className="label">Contrat(s)
+                    <Select className="input" multiple value={selCtrs} placeholder="Non classée"
+                      onChange={(e) => { const v = multi(e); setEditorGrid({ ...editorGrid, contracts: v, activities: selActs.filter((a) => refs.activities.some((x) => x.name === a && v.includes(x.contract))), cells: (editorGrid.cells || []).filter((n) => refs.cells.some((c) => c.name === n && v.includes(c.contract || ""))) }); }}>
+                      {ctrNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </Select>
+                  </label>
+                  <label className="label">Activité(s)
+                    <Select className="input" multiple value={selActs} disabled={!selCtrs.length} placeholder="Toutes les activités"
+                      onChange={(e) => { const v = multi(e); setEditorGrid({ ...editorGrid, activities: v, cells: (editorGrid.cells || []).filter((n) => !v.length || refs.cells.some((c) => c.name === n && v.includes(c.activity || ""))) }); }}>
+                      {actOpts.map((a) => <option key={a._id} value={a.name}>{selCtrs.length > 1 ? `${a.name} (${a.contract})` : a.name}</option>)}
+                    </Select>
+                  </label>
+                  <label className="label">Cellule(s)
+                    <Select className="input" multiple value={editorGrid.cells || []} disabled={!selCtrs.length} placeholder="Toutes les cellules"
+                      onChange={(e) => setEditorGrid({ ...editorGrid, cells: multi(e) })}>
+                      {cellOpts.map((c) => <option key={c._id} value={c.name}>{c.name}</option>)}
+                    </Select>
+                  </label>
+                </>;
+              })()}
+              <div className="grid-place__hint">Sélection multiple possible. Sans cellule choisie, la grille s'applique à toutes les cellules des activités (ou des contrats) choisis. Lors d'une évaluation, seules les grilles de la cellule de l'agent sont proposées.</div>
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>

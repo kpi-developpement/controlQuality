@@ -142,7 +142,7 @@ export default function DashboardView() {
   // CQ vs Management split
   const roleSplit = useMemo(() => {
     let cq = 0, mgmt = 0;
-    for (const s of allScores) { const r = s.evaluatorRole || s.evaluator?.role || ""; if (r === "cq" || r === "formateur") cq++; else if (["management", "superviseur", "referent"].includes(r)) mgmt++; }
+    for (const s of allScores) { const r = s.evaluatorRole || s.evaluator?.role || ""; if (r === "cq" || r === "formateur") cq++; else if (["management", "superviseur", "referent", "cdp"].includes(r)) mgmt++; }
     return { cq, mgmt };
   }, [allScores]);
 

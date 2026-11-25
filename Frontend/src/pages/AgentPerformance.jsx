@@ -12,7 +12,7 @@ import EditScoreModal from "./admin/components/EditScoreModal.jsx";
 import { useToast } from "../toast/ToastProvider.jsx";
 
 // Rôles qui disposent de l'écran « Nouvelle évaluation » (ouverture d'une évaluation existante)
-const CAN_OPEN = ["cq", "formateur", "management", "superviseur", "referent"];
+const CAN_OPEN = ["cq", "formateur", "management", "superviseur", "referent", "cdp"];
 const TYPE_LABEL = { standard: "Standard", picking: "Picking", coaching: "Coaching", sample: "Échantillon", calibration: "Calibrage" };
 const fmtDay = (d) => { const x = new Date(d); return Number.isNaN(x.getTime()) ? "—" : x.toLocaleDateString("fr-FR"); };
 

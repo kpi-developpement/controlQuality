@@ -66,9 +66,9 @@ function App() {
           if (role === "admin") setAdminTab(view);
           if (role === "cq") setCqView(view);
           if (role === "formateur") setFormateurView(view);
-          if (["management", "superviseur", "referent"].includes(role)) setMgmtView(view);
+          if (["management", "superviseur", "referent", "cdp"].includes(role)) setMgmtView(view);
           if (role === "pilote") pilotViewState[1](view);
-          if (["supervision", "cdp"].includes(role)) setSupervisionView(view);
+          if (role === "supervision") setSupervisionView(view);
         }
       } catch {}
     };
@@ -125,7 +125,7 @@ function App() {
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: adminTab === "calibrations", onClick: () => setAdminTab("calibrations") },
             { key: "samples", label: "Échantillons", icon: <FiLayers />, active: adminTab === "samples", onClick: () => setAdminTab("samples") },
             { key: "kpi", label: "Indicateurs qualité", icon: <FiPieChart />, active: adminTab === "kpi", onClick: () => setAdminTab("kpi") },
-            { key: "cqprogress", label: "Avancement CQ", icon: <FiTrendingUp />, active: adminTab === "cqprogress", onClick: () => setAdminTab("cqprogress") },
+            { key: "cqprogress", label: "Avancement écoutes", icon: <FiTrendingUp />, active: adminTab === "cqprogress", onClick: () => setAdminTab("cqprogress") },
             { key: "contestations", label: "Contestations", icon: <FiAlertTriangle />, active: adminTab === "contestations", onClick: () => setAdminTab("contestations") },
           ],
         },
@@ -197,7 +197,7 @@ function App() {
         {
           title: "WORKSPACE",
           items: [
-            { key: "cqprogress", label: "Avancement CQ", icon: <FiTrendingUp />, active: cqView === "cqprogress", onClick: () => setCqView("cqprogress") },
+            { key: "cqprogress", label: "Avancement écoutes", icon: <FiTrendingUp />, active: cqView === "cqprogress", onClick: () => setCqView("cqprogress") },
             { key: "performance", label: "Performance agents", icon: <FiBarChart2 />, active: cqView === "performance", onClick: () => setCqView("performance") },
             {
               key: "list",
@@ -226,7 +226,6 @@ function App() {
             { key: "contestations", label: "Contestations", icon: <FiAlertTriangle />, active: cqView === "contestations", onClick: () => setCqView("contestations") },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: cqView === "calibrations" || cqView === "calibration_new", onClick: () => setCqView("calibrations") },
             { key: "samples", label: "Échantillons", icon: <FiLayers />, active: cqView === "samples" || cqView === "sample_eval", onClick: () => setCqView("samples") },
-            { key: "kpi", label: "Indicateurs qualité", icon: <FiPieChart />, active: cqView === "kpi", onClick: () => setCqView("kpi") },
             {
               key: "coaching",
               label: "Coaching",
@@ -285,8 +284,7 @@ function App() {
             { key: "contestations", label: "Contestations", icon: <FiAlertTriangle />, active: formateurView === "contestations", onClick: () => setFormateurView("contestations") },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: formateurView === "calibrations" || formateurView === "calibration_new", onClick: () => setFormateurView("calibrations") },
             { key: "samples", label: "Échantillons", icon: <FiLayers />, active: formateurView === "samples" || formateurView === "sample_eval", onClick: () => setFormateurView("samples") },
-            { key: "kpi", label: "Indicateurs qualité", icon: <FiPieChart />, active: formateurView === "kpi", onClick: () => setFormateurView("kpi") },
-            { key: "cqprogress", label: "Avancement CQ", icon: <FiTrendingUp />, active: formateurView === "cqprogress", onClick: () => setFormateurView("cqprogress") },
+            { key: "cqprogress", label: "Avancement écoutes", icon: <FiTrendingUp />, active: formateurView === "cqprogress", onClick: () => setFormateurView("cqprogress") },
             { key: "coaching", label: "Coaching", icon: <FiHeadphones />, active: formateurView === "coaching", onClick: () => setFormateurView("coaching") },
             { key: "grids", label: "Grilles", icon: <FiGrid />, active: formateurView === "grids", onClick: () => setFormateurView("grids") },
           ],
@@ -364,8 +362,10 @@ function App() {
       );
     }
 
-    // MANAGEMENT
-    if (user.role === "management") {
+    // MANAGEMENT + rôles calqués (Superviseur, Référent technique, Chef de projet)
+    if (["management", "superviseur", "referent", "cdp"].includes(user.role)) {
+      const teamLabel = { superviseur: "Mon pôle", referent: "Mon pôle", cdp: "Mon contrat" }[user.role];
+      const mItem = (key, label, icon) => ({ key, label, icon, active: mgmtView === key, onClick: () => setMgmtView(key) });
       const navSections = [
         {
           title: "WORKSPACE",
@@ -404,7 +404,10 @@ function App() {
             },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: mgmtView === "calibrations" || mgmtView === "calibration_new", onClick: () => setMgmtView("calibrations") },
             { key: "samples", label: "Échantillons", icon: <FiLayers />, active: mgmtView === "samples" || mgmtView === "sample_eval", onClick: () => setMgmtView("samples") },
-            { key: "kpi", label: "Indicateurs qualité", icon: <FiPieChart />, active: mgmtView === "kpi", onClick: () => setMgmtView("kpi") },
+            ...(user.role === "superviseur" ? [mItem("kpi", "Indicateurs qualité", <FiPieChart />)] : []),
+            mItem("cqprogress", "Avancement écoutes", <FiTrendingUp />),
+            mItem("contestations", "Contestations", <FiAlertTriangle />),
+            ...(teamLabel ? [mItem("team", teamLabel, <FiUsers />)] : []),
             {
               key: "coaching",
               label: "Coaching",
@@ -425,71 +428,7 @@ function App() {
 
       return (
         <AppShell user={user} onLogout={handleLogout} navSections={navSections}>
-          {mgmtView === "performance" ? <AgentPerformance role="management" /> : <ManagementDashboard forcedView={mgmtView} onViewChange={setMgmtView} editScoreId={editScoreId} />}
-        </AppShell>
-      );
-    }
-
-    // RÉFÉRENT TECHNIQUE / SUPERVISEUR : évaluation et suivi de l'équipe
-    if (user.role === "referent" || user.role === "superviseur") {
-      const isSup = user.role === "superviseur";
-      const item = (key, label, icon, extra = {}) => ({ key, label, icon, active: mgmtView === key || (extra.also || []).includes(mgmtView), onClick: () => { if (key === "new") setEditScoreId(""); setMgmtView(key); } });
-      const navSections = [
-        {
-          title: "MON ÉQUIPE",
-          items: [
-            item("overview", "Tableau de bord", <FiBarChart2 />),
-            item("team", isSup ? "Ma ligne" : "Mon équipe", <FiUsers />),
-            item("performance", "Performance agents", <FiTrendingUp />),
-            item("kpi", "Indicateurs qualité", <FiPieChart />),
-          ],
-        },
-        {
-          title: "QUALITÉ",
-          items: [
-            item("form", "Évaluations", <FiList />),
-            item("new", "Nouvelle évaluation", <FiPlus />),
-            item("picking", "Appels à évaluer", <FiPhone />),
-            item("contestations", "Contestations", <FiAlertTriangle />),
-            ...(isSup ? [item("coaching", "Coaching", <FiHeadphones />), item("samples", "Échantillons", <FiLayers />, { also: ["sample_eval"] })] : []),
-            item("training", "Formations & Quiz", <FiBookOpen />),
-          ],
-        },
-      ];
-      return (
-        <AppShell user={user} onLogout={handleLogout} navSections={navSections}>
           {mgmtView === "performance" ? <AgentPerformance role={user.role} /> : <ManagementDashboard forcedView={mgmtView} onViewChange={setMgmtView} editScoreId={editScoreId} />}
-        </AppShell>
-      );
-    }
-
-    // CHEF DE PROJET : visibilité sur toute son activité
-    if (user.role === "cdp") {
-      const item = (key, label, icon) => ({ key, label, icon, active: supervisionView === key, onClick: () => setSupervisionView(key) });
-      const navSections = [
-        {
-          title: "MON ACTIVITÉ",
-          items: [
-            item("kpi", "Indicateurs qualité", <FiPieChart />),
-            item("team", "Équipes & cellules", <FiUsers />),
-            item("performance", "Performance agents", <FiBarChart2 />),
-            item("cqprogress", "Couverture CQ", <FiTrendingUp />),
-          ],
-        },
-        {
-          title: "QUALITÉ",
-          items: [
-            item("evaluations", "Évaluations", <FiList />),
-            item("contestations", "Contestations", <FiAlertTriangle />),
-            item("samples", "Échantillons", <FiLayers />),
-            item("coaching", "Coaching", <FiHeadphones />),
-            item("training", "Formations & Quiz", <FiBookOpen />),
-          ],
-        },
-      ];
-      return (
-        <AppShell user={user} onLogout={handleLogout} navSections={navSections}>
-          <SupervisionDashboard view={supervisionView} />
         </AppShell>
       );
     }
@@ -502,7 +441,7 @@ function App() {
           title: "SUPERVISION",
           items: [
             item("kpi", "Indicateurs qualité", <FiPieChart />),
-            item("cqprogress", "Avancement CQ", <FiTrendingUp />),
+            item("cqprogress", "Avancement écoutes", <FiTrendingUp />),
             item("evaluations", "Évaluations", <FiList />),
             item("calibrations", "Calibrages", <FiTarget />),
             item("samples", "Échantillons", <FiLayers />),

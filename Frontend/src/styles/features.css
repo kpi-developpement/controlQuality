@@ -129,3 +129,7 @@
 .obj-table .obj-sticky{position:sticky;left:0;background:var(--panel);z-index:1}
 .obj-table tr.is-dirty td.obj-sticky{background:color-mix(in srgb,var(--warning) 8%,var(--panel))}
 .obj-cell__left{font-size:.72rem;color:var(--muted);font-weight:600}
+
+/* --- Indicateurs qualité : formules client --- */
+.kpi-formulas{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.pwd-current__value{background:var(--panel);color:var(--text);padding:3px 10px;border-radius:8px;font-size:.95rem;letter-spacing:.02em;user-select:all}

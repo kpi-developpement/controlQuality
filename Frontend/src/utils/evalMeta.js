@@ -33,6 +33,7 @@ export const VISIBILITY_SCOPES = [
   { value: "self", label: "Lui-même uniquement" },
   { value: "team", label: "Ses pilotes affectés (référent)" },
   { value: "line", label: "Pilotes de ses référents (superviseur)" },
+  { value: "pole", label: "Son pôle (activités affectées)" },
 ];
 export const EDIT_SCOPES = [
   { value: "", label: "Par défaut du rôle" },
