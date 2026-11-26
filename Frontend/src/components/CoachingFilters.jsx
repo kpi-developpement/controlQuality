@@ -17,7 +17,7 @@ export default function CoachingFilters({ filters, onChange }) {
   return <div className="card filters-card">
     {error && <p role="alert" style={{ color: "var(--danger)" }}>{error}</p>}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 12 }}>
-      <label>Recherche rapide<input className="input" placeholder="Agent, cellule, EPS, notes, plan d’action…" value={filters.q} onChange={(e) => onChange({ ...filters, q: e.target.value })} /></label>
+      <label>Recherche rapide<input className="input" placeholder="Agent, cellule, objet, notes, plan d’action…" value={filters.q} onChange={(e) => onChange({ ...filters, q: e.target.value })} /></label>
       <label>Cellule<Select className="input" value={filters.cell} onChange={(e) => onChange({ ...filters, cell: e.target.value, pilotIds: [] })}><option value="">Toutes les cellules</option>{cells.map((c) => <option key={c}>{c}</option>)}</Select></label>
       <div><div className="label">Agent(s)</div><MultiSelect options={visible.map((p) => ({ value: String(p._id), label: `${p.name} — ${p.cell || "Sans cellule"}` }))} value={filters.pilotIds} onChange={(pilotIds) => onChange({ ...filters, pilotIds })} placeholder="Tous les agents" /></div>
     </div>

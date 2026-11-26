@@ -153,6 +153,13 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
   const isPicking = !!pickingCall;
   const isCalibration = mode === "calibration";
   const isSampleMode = mode === "sample";
+  // Picking de contrôle process : plusieurs EPS (5 minimum), sans prime
+  const [loadedEpsList, setLoadedEpsList] = useState(null);
+  // Management et rôles calqués : modification limitée aux évaluations faites par soi-même
+  const [editLocked, setEditLocked] = useState(false);
+  const isProcessPicking = mode === "picking" || (!!editScoreId && Array.isArray(loadedEpsList) && loadedEpsList.length > 0);
+  const [epsLines, setEpsLines] = useState("");
+  const epsListValues = useMemo(() => [...new Set(String(epsLines || "").split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean))], [epsLines]);
   
   const [pendingCall, setPendingCall] = useState(null);
   const [sampleCtx, setSampleCtx] = useState(null);
@@ -166,7 +173,7 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
   const effectivePickingCall = useMemo(() => {
     if (pickingCall) return pickingCall;
     if (isSampleMode) return sampleCtx;
-    if (isCalibration) return null;
+    if (isCalibration || mode === "picking") return null;
     return pendingCall;
   }, [pickingCall, pendingCall, sampleCtx, isSampleMode, isCalibration]);
 
@@ -209,7 +216,7 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
     const role = user?.role;
     if (!role) return;
 
-    const view = isCalibration ? "calibrations" : isSampleMode ? "samples" : ["management", "superviseur", "referent", "cdp"].includes(role) ? "form" : "list";
+    const view = isCalibration ? "calibrations" : isSampleMode || isProcessPicking ? "samples" : ["management", "superviseur", "referent", "cdp"].includes(role) ? "form" : "list";
     window.dispatchEvent(
       new CustomEvent("kcq:navigate", {
         detail: { role, view },
@@ -407,6 +414,12 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
         setPrimeMonth(String(data?.primeMonth || ""));
         setPilotCell(String(data?.pilot?.cell || data?.cellAtEvaluation || ""));
         setLoadedType(String(data?.evaluationType || "standard"));
+        {
+          const evId = String(data?.evaluator?._id || data?.evaluator || "");
+          const myId = String(user?._id || user?.id || "");
+          setEditLocked(["management", "superviseur", "referent", "cdp"].includes(user?.role) && !!evId && evId !== myId);
+        }
+        if (Array.isArray(data?.epsList) && data.epsList.length) { setLoadedEpsList(data.epsList); setEpsLines(data.epsList.join("\n")); }
         setSavedScoreItems(Array.isArray(data?.items) ? data.items : []);
       } catch (e) { if (m) setErr(e?.response?.data?.message || "Erreur lors du chargement."); }
     })();
@@ -491,20 +504,29 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
 
   async function onSubmit(e) {
     e.preventDefault(); setErr(""); setOkMsg("");
+    if (editLocked) return setErr("Vous ne pouvez modifier que les évaluations que vous avez réalisées.");
     if (!pilotId) return setErr("Veuillez choisir un agent.");
     if (!gridId) return setErr("Veuillez choisir une grille.");
-    if (!String(eps || "").trim()) return setErr("Veuillez renseigner l'EPS.");
+    if (isProcessPicking) {
+      if (epsListValues.length < 5) return setErr(`Un picking doit comporter au moins 5 EPS différents (${epsListValues.length} saisi${epsListValues.length > 1 ? "s" : ""}).`);
+    } else if (!String(eps || "").trim()) return setErr("Veuillez renseigner l'EPS.");
     if (!isValidDuration(callDuration)) return setErr("Durée invalide.");
     if (!callDate) return setErr("Veuillez renseigner la date de l'appel.");
-    if (!effectiveIsPicking && !editScoreId && callDate >= today) return setErr("La date de l'appel doit être antérieure à la date du jour.");
-    if (!isCalibration && !primeMonth) return setErr("Veuillez choisir le mois concerné par la prime.");
+    if (!effectiveIsPicking && !isProcessPicking && !editScoreId && callDate >= today) return setErr("La date de l'appel doit être antérieure à la date du jour.");
+    if (!isCalibration && !isProcessPicking && !primeMonth) return setErr("Veuillez choisir le mois concerné par la prime.");
     if (isCalibration && !callDirection) return setErr("Précisez le sens de l'appel (entrant ou sortant) pour un calibrage.");
     if (isSampleMode && !editScoreId && !sampleCtx?._id) return setErr("Aucun échantillon sélectionné. Repassez par l'onglet Échantillons.");
     const items = renderRows.filter((r) => r.type !== "group").map((r) => ({ label: String(r.label || "").trim(), status: statusByKey[String(r.__idx)] || (gridType === "presence" ? "PC" : "C") })).filter((it) => it.label);
     if (!items.length) return setErr("Cette grille ne contient aucun item évaluable.");
     const payload = { pilotId, gridId, eps: String(eps || "").trim(), pickingPrime: !!pickingPrime, callDate: callDate ? new Date(callDate).toISOString() : null, interactionDate: editScoreId ? (interactionDate ? new Date(interactionDate).toISOString() : null) : new Date().toISOString(), primeMonth: isCalibration ? "" : primeMonth, callDuration: callDuration || "", comment: comment || "", items, closureCode: String(closureCode || "").trim(), callDirection: callDirection || "" };
+    if (isProcessPicking) {
+      payload.epsList = epsListValues;
+      delete payload.eps;
+      payload.primeMonth = "";
+      payload.pickingPrime = false;
+    }
     if (!editScoreId) {
-      payload.evaluationType = isCalibration ? "calibration" : isSampleMode ? "sample" : effectiveIsPicking ? "picking" : "standard";
+      payload.evaluationType = isCalibration ? "calibration" : isSampleMode ? "sample" : effectiveIsPicking || isProcessPicking ? "picking" : "standard";
       if (isSampleMode && sampleCtx?._id) payload.sampleId = String(sampleCtx._id);
     }
     setLoading(true);
@@ -610,12 +632,13 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
             <div className="nep__title">
               {title}{" "}
               <span className={`badge ${isCalibration || loadedType === "calibration" ? "badge--warning" : isSampleMode || loadedType === "sample" ? "badge--primary" : "badge--muted"}`} style={{ fontSize: "0.7rem", verticalAlign: "middle" }}>
-                {typeLabel(editScoreId ? loadedType : isCalibration ? "calibration" : isSampleMode ? "sample" : effectiveIsPicking ? "picking" : "standard")}
+                {isProcessPicking ? "Picking (contrôle process)" : typeLabel(editScoreId ? loadedType : isCalibration ? "calibration" : isSampleMode ? "sample" : effectiveIsPicking ? "picking" : "standard")}
               </span>
             </div>
             <div className="nep__subtitle">
               {effectiveIsPicking
                 ? <>Appel <b style={{ color: "var(--primary)" }}>{effectivePickingCall?.eps || ""}</b> — remplissez la grille d'évaluation.</>
+                : isProcessPicking ? "Contrôle de conformité au process sur 5 EPS minimum — sans prime."
                 : editScoreId ? "Modifier les informations de l'évaluation." : "Renseigne les informations, puis évalue chaque critère."}
             </div>
           </div>
@@ -626,11 +649,17 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
           ) : (
             <div className="nep__scorePill nep__scorePill--muted"><span>Score</span><b>—</b></div>
           )}
-          <button type="submit" form="nep-form" className="btn nep__primaryBtn" disabled={loading}>
-            {loading ? (editScoreId ? "Enregistrement…" : "Création…") : (editScoreId ? "Enregistrer" : "Créer l'évaluation")}
+          <button type="submit" form="nep-form" className="btn nep__primaryBtn" disabled={loading || editLocked} title={editLocked ? "Lecture seule : évaluation réalisée par un autre évaluateur" : undefined}>
+            {loading ? (editScoreId ? "Enregistrement…" : "Création…") : (editScoreId ? "Enregistrer" : isProcessPicking ? "Créer le picking" : "Créer l'évaluation")}
           </button>
         </div>
       </div>
+
+      {editLocked && (
+        <div className="card" role="status" style={{ padding: "10px 14px", marginBottom: 12, background: "var(--warning-bg)", borderColor: "var(--warning)" }}>
+          <b>Lecture seule.</b> Cette évaluation a été réalisée par un autre évaluateur : seules vos propres évaluations sont modifiables.
+        </div>
+      )}
 
       {/* Picking info banner */}
       {effectiveIsPicking && (
@@ -684,8 +713,8 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                   <div className="nep__v">{selectedGrid?.name || selectedGrid?.title || "—"}</div>
                 </div>
                 <div className="nep__kv">
-                  <div className="nep__k">EPS</div>
-                  <div className="nep__v">{eps || "—"}</div>
+                  <div className="nep__k">{isProcessPicking ? "EPS contrôlés" : "EPS"}</div>
+                  <div className="nep__v">{isProcessPicking ? `${epsListValues.length} / 5 minimum` : eps || "—"}</div>
                 </div>
                 <div className="nep__kv">
                   <div className="nep__k">Date appel</div>
@@ -695,10 +724,10 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                   <div className="nep__k">Durée</div>
                   <div className="nep__v">{callDuration || "—"}</div>
                 </div>
-                <div className="nep__kv">
+                {!isProcessPicking && <div className="nep__kv">
                   <div className="nep__k">Picking prime</div>
                   <div className="nep__v">{pickingPrime ? "Oui" : "Non"}</div>
-                </div>
+                </div>}
                 <div className="nep__kv">
                   <div className="nep__k">Code de clôture</div>
                   <div className="nep__v">{closureCode || "—"}</div>
@@ -708,7 +737,7 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                     <div className="nep__k">Sens d'appel</div>
                     <div className="nep__v">{DIRECTIONS.find((d) => d.value === callDirection)?.label || "—"}</div>
                   </div>
-                ) : (
+                ) : isProcessPicking ? null : (
                   <div className="nep__kv">
                     <div className="nep__k">Mois de la prime</div>
                     <div className="nep__v">{primeMonthLabel(primeMonth) || "—"}</div>
@@ -821,14 +850,22 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                     {cellGrids.map((g) => <option key={String(g._id)} value={String(g._id)}>{g.name || g.title || "Grille"}</option>)}
                   </Select>
                 </div>
+                {isProcessPicking ? (
+                  <div className="nep__field nep__field--span2">
+                    <div className="label">EPS contrôlés * (5 minimum) <HelpTip text="Un EPS par ligne (ou séparés par des virgules). Les doublons sont ignorés." /></div>
+                    <textarea className="input" rows={5} value={epsLines} onChange={(e) => setEpsLines(e.target.value)} placeholder={"EPS-001\nEPS-002\nEPS-003\nEPS-004\nEPS-005"} style={{ fontFamily: "monospace" }} />
+                    <div className={epsListValues.length >= 5 ? "nep__hint" : "nep__fieldErr"}>{epsListValues.length} EPS saisi{epsListValues.length > 1 ? "s" : ""}{epsListValues.length < 5 ? ` — encore ${5 - epsListValues.length} au minimum` : ""}</div>
+                  </div>
+                ) : (
                 <div className="nep__field">
                   <div className="label">EPS <HelpTip text="Identifiant de l'appel." /></div>
                   <input className="input" value={eps} onChange={(e) => setEps(e.target.value)} onBlur={() => checkEpsDuplicate(eps)} placeholder="EPS-123…" readOnly={effectiveIsPicking} style={effectiveIsPicking ? { background: "var(--chip)" } : undefined} />
                 </div>
+                )}
                 <div className="nep__field">
-                  <div className="label">Date de l'appel * <HelpTip text="Obligatoire, antérieure au jour de l'évaluation (auto en mode picking)." /></div>
-                  <input className="input" type="date" value={callDate} required max={effectiveIsPicking || editScoreId ? undefined : isoDate(new Date(Date.now() - 864e5))} onChange={(e) => setCallDate(e.target.value)} readOnly={effectiveIsPicking} style={effectiveIsPicking ? { background: "var(--chip)" } : undefined} />
-                  {!effectiveIsPicking && !editScoreId && callDate && callDate >= today ? <div className="nep__fieldErr">Doit être différente du jour (antérieure).</div> : null}
+                  <div className="label">{isProcessPicking ? "Date des appels *" : "Date de l'appel *"} <HelpTip text="Obligatoire, antérieure au jour de l'évaluation (auto en mode picking)." /></div>
+                  <input className="input" type="date" value={callDate} required max={effectiveIsPicking || isProcessPicking || editScoreId ? (isProcessPicking ? isoDate(new Date()) : undefined) : isoDate(new Date(Date.now() - 864e5))} onChange={(e) => setCallDate(e.target.value)} readOnly={effectiveIsPicking} style={effectiveIsPicking ? { background: "var(--chip)" } : undefined} />
+                  {!effectiveIsPicking && !isProcessPicking && !editScoreId && callDate && callDate >= today ? <div className="nep__fieldErr">Doit être différente du jour (antérieure).</div> : null}
                 </div>
                 <div className="nep__field">
                   <div className="label">Date de l'évaluation <HelpTip text="Toujours la date du jour (non modifiable)." /></div>
@@ -866,13 +903,13 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                     <span style={{ fontSize: "0.75rem", color: "var(--muted)", marginLeft: 4 }}>min : sec</span>
                   </div>
                 </div>
-                <div className="nep__field">
+                {!isProcessPicking && <div className="nep__field">
                   <div className="label">Picking prime <HelpTip text="Éligibilité prime." /></div>
                   <label className="nep__toggle">
                     <input type="checkbox" checked={pickingPrime} onChange={(e) => setPickingPrime(e.target.checked)} />
                     <span>Activer</span>
                   </label>
-                </div>
+                </div>}
                 <div className="nep__field">
                   <div className="label">Code de clôture <HelpTip text="Code de clôture de l'interaction (liste gérée par l'administrateur, saisie libre possible)." /></div>
                   <input className="input" list="nep-closure-codes" value={closureCode} maxLength={120} onChange={(e) => setClosureCode(e.target.value)} placeholder="Ex : RESOLU" />
@@ -887,7 +924,7 @@ export default function NewEvaluationPage({ title = "Nouvelle évaluation", edit
                       {DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
                     </Select>
                   </div>
-                ) : (
+                ) : isProcessPicking ? null : (
                   <div className="nep__field">
                     <div className="label">Mois de la prime * <HelpTip text="Mois de prime concerné par cette évaluation (obligatoire)." /></div>
                     <Select className="input" value={primeMonth} onChange={(e) => setPrimeMonth(e.target.value)}>

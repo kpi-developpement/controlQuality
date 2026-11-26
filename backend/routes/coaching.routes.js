@@ -43,7 +43,8 @@ async function resolveScoreIdsFromFilters(query) {
   const dateRange = parseDateRange(query.dateFrom, query.dateTo);
 
   const scoreQ = {};
-  if (pilotIds.length) scoreQ.pilot = { $in: pilotIds };
+  // L'agent est filtré directement sur le coaching (coachings sans évaluation liée inclus)
+  void pilotIds;
   if (evaluatorIds.length) scoreQ.evaluator = { $in: evaluatorIds };
   if (dateRange) scoreQ.createdAt = dateRange;
 
@@ -71,7 +72,7 @@ async function applyCoachingFilters(q, query) {
       User.find({ $or: [{ name: rx }, { cell: rx }, { email: rx }] }).select("_id").lean(),
       Score.find({ eps: rx }).select("_id").lean(),
     ]);
-    clauses.push({ $or: [{ notes: rx }, { actionPlan: rx }, { pilotComment: rx }, { pilot: { $in: pilots.map((p) => p._id) } }, { score: { $in: scores.map((s) => s._id) } }] });
+    clauses.push({ $or: [{ subject: rx }, { notes: rx }, { actionPlan: rx }, { pilotComment: rx }, { pilot: { $in: pilots.map((p) => p._id) } }, { score: { $in: scores.map((s) => s._id) } }] });
   }
   const statuses = parseCsvList(query.status).filter((s) => ["open", "in_progress", "done"].includes(s));
   if (statuses.length) q.status = { $in: statuses };
@@ -108,23 +109,34 @@ router.get("/filter-options", permit("admin", "cq", "management", "formateur", "
  */
 router.post("/", permit("cq", "management", "admin", "formateur", "superviseur"), async (req, res) => {
   try {
-    const { scoreId, notes, actionPlan, status, followUpDate } = req.body || {};
-    if (!isValidObjectId(scoreId)) {
-      return res.status(400).json({ message: "scoreId invalide" });
-    }
+    const { scoreId, pilotId, notes, actionPlan, status, followUpDate } = req.body || {};
+    const subject = String(req.body?.subject || "").trim().slice(0, 300);
+    if (!subject) return res.status(400).json({ message: "L'objet du coaching est obligatoire." });
 
-    const score = await Score.findById(scoreId).lean();
-    if (!score) return res.status(404).json({ message: "Évaluation introuvable" });
+    // Évaluation liée facultative : sinon l'agent est choisi directement
+    let score = null;
+    if (scoreId) {
+      if (!isValidObjectId(scoreId)) return res.status(400).json({ message: "Évaluation invalide." });
+      score = await Score.findById(scoreId).lean();
+      if (!score) return res.status(404).json({ message: "Évaluation introuvable" });
+    }
+    const targetPilot = score ? score.pilot : pilotId;
+    if (!isValidObjectId(targetPilot)) return res.status(400).json({ message: "Choisissez un agent." });
+    if (!score) {
+      const exists = await User.exists({ _id: targetPilot, role: "pilote" });
+      if (!exists) return res.status(404).json({ message: "Agent introuvable." });
+    }
     const createScope = await getScope(req);
     if (createScope.editScope === "none") return res.status(403).json({ message: "Votre profil est en lecture seule." });
-    if (!(await isPilotInScope(createScope, score.pilot))) {
+    if (!(await isPilotInScope(createScope, targetPilot))) {
       return res.status(403).json({ message: "Cet agent ne fait pas partie de votre périmètre." });
     }
 
     const doc = await Coaching.create({
-      score: score._id,
-      pilot: score.pilot,
-      evaluator: score.evaluator,
+      score: score ? score._id : null,
+      subject,
+      pilot: targetPilot,
+      evaluator: score ? score.evaluator : null,
       // auth middleware sets req.user = { id, role, name, ... }
       // Some tokens may include _id, so we support both.
       coach: req.user.id || req.user._id,
@@ -146,11 +158,11 @@ router.post("/", permit("cq", "management", "admin", "formateur", "superviseur")
     try {
       const Notification = require("../models/Notification");
       const coachName = req.user.name || "Coach";
-      const pilotUserId = score.pilot;
+      const pilotUserId = targetPilot;
       const notif = await Notification.create({
         type: "notification",
         title: "Nouveau coaching",
-        message: `🎯 ${coachName} vous a créé un coaching suite à l'évaluation ${score.eps || ""}. Consultez-le et validez-le.`,
+        message: `🎯 ${coachName} vous a créé un coaching : « ${subject} ». Consultez-le et validez-le.`,
         targetUsers: [pilotUserId],
         createdBy: req.user.id || req.user._id,
         meta: { coachingId: String(doc._id) },
@@ -269,6 +281,11 @@ router.patch("/:id", permit("cq", "management", "admin", "formateur", "supervise
     }
 
     const patch = {};
+    if (req.body.subject !== undefined) {
+      const subj = String(req.body.subject || "").trim().slice(0, 300);
+      if (!subj) return res.status(400).json({ message: "L'objet du coaching est obligatoire." });
+      patch.subject = subj;
+    }
     if (req.body.notes !== undefined) patch.notes = String(req.body.notes || "");
     if (req.body.actionPlan !== undefined) patch.actionPlan = String(req.body.actionPlan || "");
     if (req.body.status !== undefined) {

@@ -13,6 +13,7 @@ const QuizAttemptSchema = new mongoose.Schema({
   score: { type: Number, default: 0 },
   total: { type: Number, default: 0 },
   completedAt: { type: Date, default: Date.now },
+  timedOut: { type: Boolean, default: false },
 }, { _id: true });
 
 const TrainingSchema = new mongoose.Schema({
@@ -21,6 +22,12 @@ const TrainingSchema = new mongoose.Schema({
   pdfUrl: { type: String, default: "" },
   pdfData: { type: String, default: "" },
   videoUrl: { type: String, default: "" },
+  // Support de formation déposé (PDF ou PowerPoint). Un PowerPoint est converti en PDF pour être affiché dans l'application.
+  fileUrl: { type: String, default: "" },
+  fileName: { type: String, default: "" },
+  fileType: { type: String, default: "" }, // pdf | ppt
+  // Délai de passation du quiz en minutes (0 = sans limite)
+  timeLimitMinutes: { type: Number, default: 0, min: 0, max: 600 },
   category: { type: String, default: "" },
   // Target: roles, cells, individual users (all empty = visible to everyone)
   roles: [{ type: String }],

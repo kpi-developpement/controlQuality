@@ -3,6 +3,9 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
+# LibreOffice : conversion des supports PowerPoint en PDF (affichage dans l'onglet Formations & Quiz)
+RUN apk add --no-cache libreoffice ttf-dejavu font-noto
+
 COPY package*.json ./
 
 # Le lock file contient les URLs du registry interne : installation depuis le registry public

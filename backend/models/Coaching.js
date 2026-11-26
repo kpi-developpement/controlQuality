@@ -7,7 +7,10 @@ const mongoose = require("mongoose");
  */
 const CoachingSchema = new mongoose.Schema(
   {
-    score: { type: mongoose.Schema.Types.ObjectId, ref: "Score", required: true },
+    // Évaluation liée : facultative (un coaching n'est plus bloqué sur une évaluation existante)
+    score: { type: mongoose.Schema.Types.ObjectId, ref: "Score", default: null },
+    // Objet du coaching (remplace l'EPS dans les écrans)
+    subject: { type: String, default: "", trim: true, maxlength: 300 },
     pilot: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     evaluator: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false },
     coach: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -32,5 +35,6 @@ const CoachingSchema = new mongoose.Schema(
 CoachingSchema.index({ pilot: 1, createdAt: -1 });
 CoachingSchema.index({ coach: 1, createdAt: -1 });
 CoachingSchema.index({ status: 1 });
+CoachingSchema.index({ score: 1 });
 
 module.exports = mongoose.model("Coaching", CoachingSchema);

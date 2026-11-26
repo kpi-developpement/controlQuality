@@ -254,6 +254,152 @@ router.get("/summary", permit(...INDICATOR_READERS), async (req, res) => {
 });
 
 /**
+ * Tableau de bord — indicateurs affichés selon le rôle (liste des besoins v3).
+ * Chaque rôle ne reçoit que les indicateurs auxquels il a droit ; le périmètre de données
+ * reste celui du rôle (admin : tout, CDP : contrat, superviseur / RT : cellules affectées, agent : lui-même).
+ */
+const ALL_ROLES = ["admin", "cdp", "superviseur", "referent", "management", "cq", "formateur", "supervision", "pilote"];
+const STAFF_ROLES = ALL_ROLES.filter((r) => r !== "pilote");
+const LEAD_ROLES = ["admin", "cdp", "superviseur", "supervision"];
+const DASHBOARD_INDICATORS = [
+  { key: "qualityScore", label: "Score qualité (note QA)", roles: ALL_ROLES, kind: "percent", formula: "Moyenne des scores des évaluations" },
+  { key: "evaluations", label: "Nombre d'évaluations", roles: STAFF_ROLES, kind: "count", formula: "Évaluations réalisées sur la période (hors calibrages et pickings)" },
+  { key: "calibrations", label: "Nombre de calibrages", roles: STAFF_ROLES, kind: "count", formula: "Calibrages réalisés sur la période" },
+  { key: "pickings", label: "Nombre de pickings", roles: STAFF_ROLES, kind: "count", formula: "Pickings réalisés sur la période" },
+  { key: "coachingValidation", label: "Taux de validation des coachings", roles: ALL_ROLES, kind: "rate", formula: "Coachings validés / coachings reçus" },
+  { key: "evaluationValidation", label: "Taux de validation des évaluations", roles: ALL_ROLES, kind: "rate", formula: "Évaluations validées par l'agent / évaluations reçues" },
+  { key: "calibrationValidation", label: "Taux de validation des calibrages", roles: ALL_ROLES, kind: "rate", formula: "Calibrages validés par l'agent / calibrages reçus" },
+  { key: "evaluationContestation", label: "Taux de contestation des évaluations", roles: LEAD_ROLES, kind: "rate", inverse: true, formula: "Évaluations contestées / évaluations reçues" },
+  { key: "calibrationContestation", label: "Taux de contestation des calibrages", roles: LEAD_ROLES, kind: "rate", inverse: true, formula: "Calibrages contestés / calibrages reçus" },
+  { key: "quizCompletion", label: "Taux de passation des quiz", roles: LEAD_ROLES, kind: "rate", formula: "Quiz actifs finalisés / quiz actifs attribués" },
+  { key: "coverage", label: "Taux de couverture des évaluations", roles: LEAD_ROLES, kind: "rate", formula: "Agents actifs évalués / total des agents actifs" },
+  { key: "coachingRate", label: "Taux de coaching", roles: LEAD_ROLES, kind: "rate", formula: "Nombre de coachings / nombre de pilotes actifs" },
+  { key: "connection", label: "Taux de connexion à l'application", roles: ["admin"], kind: "rate", formula: "Utilisateurs connectés / total des utilisateurs" },
+];
+const EVALUATOR_ROLES = ["cq", "superviseur", "referent", "management", "formateur", "cdp", "admin"];
+const csvStr = (v) => String(v || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 200).map((x) => x.slice(0, 120));
+
+function dashboardPeriod(query) {
+  const parse = (v) => { if (!v) return null; const d = new Date(String(v)); return Number.isNaN(d.getTime()) ? undefined : d; };
+  const from = parse(query.dateFrom);
+  const to = parse(query.dateTo);
+  if (from === undefined || to === undefined) throw Object.assign(new Error("Période invalide."), { status: 400 });
+  if (to && /^\d{4}-\d{2}-\d{2}$/.test(String(query.dateTo || ""))) to.setUTCHours(23, 59, 59, 999);
+  if (from && to && from > to) throw Object.assign(new Error("La date de début dépasse la date de fin."), { status: 400 });
+  return { from, to };
+}
+const inRange = (field, p) => {
+  if (!p.from && !p.to) return null;
+  const r = {};
+  if (p.from) r.$gte = p.from;
+  if (p.to) r.$lte = p.to;
+  return { [field]: r };
+};
+
+router.get("/dashboard", permit(...ALL_ROLES), async (req, res) => {
+  try {
+    const role = String(req.user.role || "");
+    const period = dashboardPeriod(req.query);
+    const scope = await getScope(req);
+    const isAgent = role === "pilote";
+
+    // Population : périmètre du rôle + filtres contrat / projet / cellule / agent
+    const base = {};
+    if (!isAgent) {
+      const cells = csvStr(req.query.cell);
+      const contracts = csvStr(req.query.contract);
+      const projects = csvStr(req.query.project);
+      const pilotIds = csvIds(req.query.pilotId);
+      if (cells.length) base.cell = { $in: cells };
+      if (contracts.length) base.contract = { $in: contracts };
+      if (projects.length) base.project = { $in: projects };
+      if (pilotIds.length) base._id = { $in: pilotIds };
+    }
+    const sf = userFilterForScope(scope);
+    const where = sf ? { $and: [base, sf] } : base;
+    const filtered = !!sf || Object.keys(base).length > 0;
+    const [agents, pilotFilterIds] = await Promise.all([
+      User.find({ $and: [where, { role: "pilote", active: { $ne: false } }] }).select("_id").lean(),
+      filtered ? User.distinct("_id", where) : Promise.resolve(null),
+    ]);
+    const agentIds = new Set(agents.map((a) => String(a._id)));
+
+    // Évaluateur par rôle
+    const evalRoles = isAgent ? [] : csvStr(req.query.evaluatorRole).filter((r) => EVALUATOR_ROLES.includes(r));
+    const evaluatorIds = evalRoles.length ? await User.distinct("_id", { role: { $in: evalRoles } }) : null;
+
+    const scoreAnd = (types) => {
+      const and = [typeClause(types)];
+      const d = inRange("createdAt", period);
+      if (d) and.push(d);
+      if (pilotFilterIds) and.push({ pilot: { $in: pilotFilterIds } });
+      if (evaluatorIds) and.push({ evaluator: { $in: evaluatorIds } });
+      return { $and: and };
+    };
+    const fields = "pilot evaluator createdAt contested contestedAt reevaluatedAt contestComment pilotValidated evaluationType items gridId";
+    const [prod, calibrations] = await Promise.all([
+      Score.find(scoreAnd(PRODUCTION_TYPES)).select(fields).lean(),
+      Score.find(scoreAnd(["calibration"])).select("pilot contested contestedAt contestComment reevaluatedAt pilotValidated").lean(),
+    ]);
+    const gridById = await gridsFor(prod);
+    const pct = (s) => Number(computeCompliancePercent(s, s.gridId ? gridById.get(String(s.gridId)) : null)) || 0;
+    const evaluations = prod.filter((s) => typeOf(s) !== "picking");
+    const pickings = prod.filter((s) => typeOf(s) === "picking");
+
+    const cAnd = [];
+    const cd = inRange("createdAt", period);
+    if (cd) cAnd.push(cd);
+    if (pilotFilterIds) cAnd.push({ pilot: { $in: pilotFilterIds } });
+    if (evaluatorIds) cAnd.push({ coach: { $in: evaluatorIds } });
+    const coachings = await Coaching.find(cAnd.length ? { $and: cAnd } : {}).select("pilot pilotAcknowledged status").lean();
+
+    const allowed = DASHBOARD_INDICATORS.filter((d) => d.roles.includes(role));
+    const want = new Set(allowed.map((d) => d.key));
+    const values = {};
+    const ratio = (num, den) => ({ num, den, value: K.rate(num, den) });
+
+    if (want.has("qualityScore")) values.qualityScore = { value: prod.length ? K.round1(prod.reduce((n, s) => n + pct(s), 0) / prod.length) : null, num: prod.length, den: null };
+    if (want.has("evaluations")) values.evaluations = { value: evaluations.length };
+    if (want.has("calibrations")) values.calibrations = { value: calibrations.length };
+    if (want.has("pickings")) values.pickings = { value: pickings.length };
+    if (want.has("coachingValidation")) { const c = K.coachingValidation(coachings); values.coachingValidation = ratio(c.validated, c.received); }
+    if (want.has("evaluationValidation")) { const v = K.evaluationValidation(prod); values.evaluationValidation = ratio(v.validated, v.received); }
+    if (want.has("calibrationValidation")) { const v = K.evaluationValidation(calibrations); values.calibrationValidation = ratio(v.validated, v.received); }
+    if (want.has("evaluationContestation")) { const v = K.evaluationContestation(prod); values.evaluationContestation = ratio(v.contested, v.received); }
+    if (want.has("calibrationContestation")) { const v = K.evaluationContestation(calibrations); values.calibrationContestation = ratio(v.contested, v.received); }
+    if (want.has("coverage")) {
+      const evaluated = new Set(prod.map((s) => String(s.pilot)).filter((id) => agentIds.has(id))).size;
+      values.coverage = ratio(evaluated, agents.length);
+    }
+    if (want.has("coachingRate")) values.coachingRate = ratio(coachings.length, agents.length);
+    if (want.has("quizCompletion")) {
+      const quizUsers = await User.find({ $and: [where, { active: { $ne: false }, role: { $ne: "admin" } }] }).select("role cell").lean();
+      const trainings = await Training.find({ active: { $ne: false }, "questions.0": { $exists: true } })
+        .select("title active roles targetCells targetUsers dueDate attempts.user starts.user questions._id").lean();
+      const q = K.quizCompletion(trainings, quizUsers);
+      values.quizCompletion = ratio(q.finalized, q.assignments);
+    }
+    if (want.has("connection")) {
+      const usageIds = await User.distinct("_id", { $and: [where, { active: { $ne: false } }] });
+      const lAnd = [{ user: { $in: usageIds } }];
+      const ld = inRange("at", period);
+      if (ld) lAnd.push(ld);
+      const logged = await LoginEvent.distinct("user", { $and: lAnd });
+      values.connection = ratio(logged.length, usageIds.length);
+    }
+
+    res.json({
+      role,
+      period: { from: period.from, to: period.to, dateBasis: "evaluation" },
+      population: { activeAgents: agents.length },
+      indicators: allowed.map((d) => ({ key: d.key, label: d.label, kind: d.kind, inverse: !!d.inverse, formula: d.formula, ...(values[d.key] || { value: null }) })),
+    });
+  } catch (err) {
+    handle(res, err, "GET /kpi/dashboard error:");
+  }
+});
+
+/**
  * GET /api/kpi/breakdown?dimension=evaluator|pilot|cell|project|contract|month|type
  * Volumes, moyenne, contestations et validations par dimension (identification des contestations).
  */

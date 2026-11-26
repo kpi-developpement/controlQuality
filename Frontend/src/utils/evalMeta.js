@@ -97,7 +97,42 @@ export function evalExportRow(s) {
     "Validée par l'agent": s.pilotValidated ? "Oui" : "Non",
     "Date validation agent": fmtDate(s.pilotValidatedAt),
     "Détail items": itemsText(s.items),
+    "Éléments PNC / NP": nonConformText(s.items, ["PNC", "NP"]),
+    "Éléments NC": nonConformText(s.items, ["NC"]),
+    Coaching: coachingLabel(s),
   };
+}
+
+/** Libellés des critères ayant l'un des statuts donnés (ex. PNC / NP), séparés par « | ». */
+export function nonConformText(items, statuses) {
+  if (!Array.isArray(items)) return "";
+  return items
+    .filter((it) => statuses.includes(String(it?.status || "").toUpperCase()))
+    .map((it) => `${it.label || ""} (${String(it.status).toUpperCase()})`)
+    .join(" | ");
+}
+
+/** Couleur du score : 80-100 % vert, 50-80 % orange, < 50 % rouge. */
+export function scoreBadgeClass(pct) {
+  const n = Number(pct || 0);
+  if (n >= 80) return "badge badge--success";
+  if (n >= 50) return "badge badge--warning";
+  return "badge badge--danger";
+}
+
+/** Seuil sous lequel un coaching par l'évaluateur est obligatoire. */
+export const COACHING_REQUIRED_BELOW = 70;
+/** État du coaching d'une évaluation : finalisé, en cours, requis (score < 70 %) ou aucun. */
+export function coachingState(s) {
+  if (s?.coaching) return s.coaching.done || s.coaching.status === "done" ? "done" : "in_progress";
+  const required = s?.coachingRequired ?? ((s?.evaluationType || "standard") !== "calibration" && Number(scorePercent(s)) < COACHING_REQUIRED_BELOW);
+  return required ? "required" : "";
+}
+export function coachingLabel(s) {
+  return { done: "Coaching finalisé", in_progress: "Coaching en cours", required: "Coaching requis" }[coachingState(s)] || "";
+}
+export function coachingBadgeClass(state) {
+  return { done: "badge badge--success", in_progress: "badge badge--primary", required: "badge badge--danger" }[state] || "badge badge--muted";
 }
 
 /** Grille exportée : une ligne par critère, avec le code de clôture et le type. */

@@ -1,5 +1,5 @@
 import React from "react";
-import CQEvaluations from "./cq/CQEvaluations.jsx";
+import EvaluationsList from "./shared/EvaluationsList.jsx";
 import CQCoaching from "./cq/CQCoaching.jsx";
 import CQSettings from "./cq/CQSettings.jsx";
 import GridsView from "./admin/GridsView.jsx";
@@ -8,11 +8,16 @@ import TrainingPage from "./TrainingPage.jsx";
 import NewEvaluationPage from "./shared/NewEvaluationPage.jsx";
 import PickingListPage from "./shared/PickingListPage.jsx";
 import CalibrationsPage from "./shared/CalibrationsPage.jsx";
-import SamplesPage from "./shared/SamplesPage.jsx";
+import PickingPage from "./shared/PickingPage.jsx";
 import KpiDashboard from "./kpi/KpiDashboard.jsx";
+import DashboardIndicators from "./kpi/DashboardIndicators.jsx";
 import CQProgressView from "./cq/CQProgressView.jsx";
 import ContestationsPage from "./shared/ContestationsPage.jsx";
 import PilotOnboardingPage from "./formateur/PilotOnboardingPage.jsx";
+
+function currentRole() {
+  try { return JSON.parse(localStorage.getItem("user") || "{}").role || "cq"; } catch { return "cq"; }
+}
 
 export default function CQDashboard({ forcedView, onViewChange, editScoreId }) {
   // Le rôle CQ n'a plus le menu "Tableau de bord" : on tombe par défaut sur la liste des évaluations.
@@ -29,9 +34,11 @@ export default function CQDashboard({ forcedView, onViewChange, editScoreId }) {
   // Contrat Orange
   if (view === "calibrations") return <CalibrationsPage />;
   if (view === "calibration_new") return <NewEvaluationPage title="Nouveau calibrage" mode="calibration" />;
-  if (view === "samples") return <SamplesPage />;
+  if (view === "samples") return <PickingPage />;
+  if (view === "picking_new") return <NewEvaluationPage title={editScoreId ? "Modifier le picking" : "Nouveau picking"} mode="picking" editScoreId={editScoreId} />;
   if (view === "sample_eval") return <NewEvaluationPage title="Évaluation d'échantillon" mode="sample" />;
   if (view === "kpi") return <KpiDashboard />;
+  if (view === "dashboard" || view === "stats") return <DashboardIndicators role={currentRole()} />;
   if (view === "cqprogress") return <CQProgressView />;
 
   if (view === "contestations") return <ContestationsPage />;
@@ -51,6 +58,6 @@ export default function CQDashboard({ forcedView, onViewChange, editScoreId }) {
   if (view === "settings") return <CQSettings />;
 
   // Par défaut et pour la vue "list" : la liste des évaluations
-  return <CQEvaluations />;
+  return <EvaluationsList role={currentRole()} />;
 }
 

@@ -1,9 +1,9 @@
 import React from "react";
-import KpiDashboard from "./kpi/KpiDashboard.jsx";
+import DashboardIndicators from "./kpi/DashboardIndicators.jsx";
 import CQProgressView from "./cq/CQProgressView.jsx";
-import MgmtEvaluations from "./management/MgmtEvaluations.jsx";
+import EvaluationsList from "./shared/EvaluationsList.jsx";
 import CalibrationsPage from "./shared/CalibrationsPage.jsx";
-import SamplesPage from "./shared/SamplesPage.jsx";
+import PickingPage from "./shared/PickingPage.jsx";
 import CoachingView from "./admin/CoachingView.jsx";
 import AgentPerformance from "./AgentPerformance.jsx";
 import TrainingPage from "./TrainingPage.jsx";
@@ -18,11 +18,11 @@ export default function SupervisionDashboard({ view }) {
   if (view === "cqprogress") return <CQProgressView />;
   if (view === "team") return <TeamPage />;
   if (view === "contestations") return <ContestationsPage />;
-  if (view === "evaluations") return <MgmtEvaluations readOnly />;
+  if (view === "evaluations") return <EvaluationsList role="supervision" readOnly />;
   if (view === "calibrations") return <CalibrationsPage />;
-  if (view === "samples") return <SamplesPage />;
+  if (view === "samples") return <PickingPage />;
   if (view === "coaching") return <CoachingView readOnly />;
   if (view === "performance") return <AgentPerformance role={(JSON.parse(localStorage.getItem("user") || "{}").role) || "supervision"} />;
   if (view === "training") return <TrainingPage />;
-  return <KpiDashboard />;
+  return <DashboardIndicators role="supervision" title="Indicateurs qualité" />;
 }

@@ -59,7 +59,8 @@ export default function CoachingView({ readOnly = false }) {
       Coach: c.coach?.name || "",
       Agent: c.pilot?.name || c.score?.pilot?.name || "",
       Cellule: c.pilot?.cell || c.score?.pilot?.cell || "",
-      EPS: c.score?.eps || "",
+      "Objet du coaching": c.subject || "",
+      "Évaluation liée (EPS)": c.score?.eps || "",
       Statut: statusLabel(c.status),
       Relance: fmtDate(c.followUpDate),
       Notes: c.notes || "",
@@ -123,7 +124,7 @@ export default function CoachingView({ readOnly = false }) {
                 <th>Date</th>
                 <th>Coach</th>
                 <th>Agent</th><th>Cellule</th>
-                <th>EPS</th>
+                <th>Objet du coaching</th>
                 <th>Statut</th>
                 <th>Validation agent</th>
                 <th>Relance</th>
@@ -140,7 +141,7 @@ export default function CoachingView({ readOnly = false }) {
                     <td style={{ fontWeight: 600 }}>{c.coach?.name || "—"}</td>
                     <td style={{ fontWeight: 600 }}>{c.pilot?.name || c.score?.pilot?.name || "—"}</td>
                     <td>{c.pilot?.cell || c.score?.pilot?.cell || "—"}</td>
-                    <td style={{ fontFamily: "monospace", fontSize: "0.82rem" }}>{c.score?.eps || "—"}</td>
+                    <td style={{ maxWidth: 220 }}>{c.subject || (c.score?.eps ? <span style={{ color: "var(--muted)" }}>Évaluation {c.score.eps}</span> : "—")}</td>
                     <td>
                       <span className={`badge ${c.status === "done" ? "badge--success" : c.status === "in_progress" ? "badge--primary" : "badge--warning"}`}>
                         {statusLabel(c.status)}
@@ -199,7 +200,8 @@ export default function CoachingView({ readOnly = false }) {
               {[
                 { k: "Coach", v: detail.coach?.name || "—" },
                 { k: "Agent", v: detail.pilot?.name || detail.score?.pilot?.name || "—" },
-                { k: "EPS", v: detail.score?.eps || "—" },
+                { k: "Objet du coaching", v: detail.subject || "—" },
+                { k: "Évaluation liée", v: detail.score?.eps || "Aucune" },
                 { k: "Statut", v: statusLabel(detail.status) },
                 { k: "Créé le", v: fmtFull(detail.createdAt) },
                 { k: "Relance", v: fmtDate(detail.followUpDate) },

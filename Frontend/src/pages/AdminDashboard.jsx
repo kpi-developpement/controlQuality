@@ -7,11 +7,12 @@ import GridsView from "./admin/GridsView.jsx";
 import NotificationsView from "./admin/NotificationsView.jsx";
 import AdminHealth from "./admin/AdminHealth.jsx";
 import AdminAudit from "./admin/AdminAudit.jsx";
-import EvaluationsView from "./admin/EvaluationsView.jsx";
+import EvaluationsList from "./shared/EvaluationsList.jsx";
 import TrainingPage from "./TrainingPage.jsx";
 import CalibrationsPage from "./shared/CalibrationsPage.jsx";
-import SamplesPage from "./shared/SamplesPage.jsx";
+import PickingPage from "./shared/PickingPage.jsx";
 import KpiDashboard from "./kpi/KpiDashboard.jsx";
+import DashboardIndicators from "./kpi/DashboardIndicators.jsx";
 import CQProgressView from "./cq/CQProgressView.jsx";
 import QualitySettingsView from "./admin/QualitySettingsView.jsx";
 import Ico from "../ui/Ico.jsx";
@@ -36,7 +37,7 @@ export default function AdminDashboard({ controlledTab }) {
   if (tab === "powerbi") return <PowerBIView />;
   // Contrat Orange
   if (tab === "calibrations") return <CalibrationsPage />;
-  if (tab === "samples") return <SamplesPage />;
+  if (tab === "samples") return <PickingPage />;
   if (tab === "kpi") return <KpiDashboard />;
   if (tab === "cqprogress") return <CQProgressView />;
   if (tab === "quality") return <Frame icon="settings" title="Paramètres qualité" subtitle="Contrôle d'accès, profils, projets, contrats et codes de clôture."><QualitySettingsView /></Frame>;
@@ -47,6 +48,7 @@ export default function AdminDashboard({ controlledTab }) {
   if (tab === "audit") return <AdminAudit />;
   if (tab === "training") return <TrainingPage />;
   if (tab === "settings") return <Frame icon="users" title="Utilisateurs & structures" subtitle="Collaborateurs, rôles, cellules et équipes."><UsersStructuresView /></Frame>;
-  if (tab === "evaluations") return <Frame icon="clipboard" title="Évaluations" subtitle="Toutes les évaluations CQ et terrain, avec filtres et exports."><EvaluationsView /></Frame>;
-  return <DashboardView />;
+  if (tab === "evaluations") return <Frame icon="clipboard" title="Évaluations" subtitle="Toutes les évaluations CQ et Management dans un seul tableau, avec filtres et exports."><EvaluationsList role="admin" embedded /></Frame>;
+  // Tableau de bord : indicateurs qualité intégrés (filtres, affichage selon le rôle) + cockpit
+  return <><DashboardIndicators role="admin" /><DashboardView /></>;
 }

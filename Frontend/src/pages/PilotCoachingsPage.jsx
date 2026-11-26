@@ -23,7 +23,7 @@ export default function PilotCoachingsPage() {
     finally { setSubmitting(false); }
   }
 
-  const visible = coachings.filter((c) => inPeriod(c.createdAt, period) && [c.notes, c.actionPlan, c.score?.eps, c.coach?.name].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const visible = coachings.filter((c) => inPeriod(c.createdAt, period) && [c.subject, c.notes, c.actionPlan, c.score?.eps, c.coach?.name].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const pending = visible.filter((c) => !c.pilotAcknowledged);
   const acknowledged = visible.filter((c) => c.pilotAcknowledged);
 
@@ -34,7 +34,7 @@ export default function PilotCoachingsPage() {
         <div style={{ color: "var(--muted)", fontSize: "0.875rem", marginTop: 2 }}>Prenez connaissance de vos coachings et validez-les avec un commentaire.</div>
       </div>
 
-      <div className="card filters-card"><label>Recherche rapide<input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Coach, EPS, notes, plan d’action…" /></label><PeriodFilter value={period} onChange={setPeriod} label="Date de création du coaching" /></div>
+      <div className="card filters-card"><label>Recherche rapide<input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Coach, objet, notes, plan d’action…" /></label><PeriodFilter value={period} onChange={setPeriod} label="Date de création du coaching" /></div>
       {loading && <div className="card" style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>Chargement…</div>}
 
       {!loading && !visible.length && (
@@ -54,7 +54,7 @@ export default function PilotCoachingsPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: "0.95rem" }}><Ico n="user" /> Coach : {c.coach?.name || "—"}</div>
-                  <div style={{ fontSize: "0.82rem", color: "var(--muted)", marginTop: 2 }}>EPS : {c.score?.eps || "—"} • {c.createdAt ? new Date(c.createdAt).toLocaleDateString("fr-FR") : "—"}</div>
+                  <div style={{ fontSize: "0.82rem", color: "var(--muted)", marginTop: 2 }}>Objet : {c.subject || (c.score?.eps ? `Évaluation ${c.score.eps}` : "—")} • {c.createdAt ? new Date(c.createdAt).toLocaleDateString("fr-FR") : "—"}</div>
                 </div>
                 <span className={`badge ${c.status === "done" ? "badge--success" : c.status === "in_progress" ? "badge--primary" : "badge--warning"}`}>
                   {c.status === "done" ? "Terminé" : c.status === "in_progress" ? "En cours" : "Ouvert"}
@@ -102,7 +102,7 @@ export default function PilotCoachingsPage() {
             <div key={c._id} className="card" style={{ padding: 16, marginBottom: 10, borderLeft: "4px solid var(--success)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{c.coach?.name || "—"} <span style={{ color: "var(--muted)", fontWeight: 400 }}>— EPS : {c.score?.eps || "—"}</span></div>
+                  <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{c.coach?.name || "—"} <span style={{ color: "var(--muted)", fontWeight: 400 }}>— {c.subject || (c.score?.eps ? `Évaluation ${c.score.eps}` : "—")}</span></div>
                   <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginTop: 2 }}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString("fr-FR") : ""}</div>
                 </div>
                 <span className="badge badge--success" style={{ fontSize: "0.72rem" }}>Validé {c.pilotAcknowledgedAt ? new Date(c.pilotAcknowledgedAt).toLocaleDateString("fr-FR") : ""}</span>

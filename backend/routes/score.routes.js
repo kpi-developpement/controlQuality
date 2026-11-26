@@ -54,12 +54,30 @@ async function applyOrangeFilters(q, query, req, { defaultTypes = null } = {}) {
   const dir = normalizeDirection(query.callDirection);
   if (dir) andClause(q, { callDirection: dir });
   const perim = {};
-  if (query.project) perim.project = String(query.project);
-  if (query.contract) perim.contract = String(query.contract);
+  const csv = (x) => String(x || "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 200);
+  if (query.project) perim.project = { $in: csv(query.project) };
+  if (query.contract) perim.contract = { $in: csv(query.contract) };
   if (Object.keys(perim).length) {
     const ids = await User.distinct("_id", perim);
     andClause(q, { pilot: { $in: ids } });
   }
+  // Évaluateur par rôle (CQ, Superviseur, Référent, Management, Formateur…)
+  const evalRoles = csv(query.evaluatorRole);
+  if (evalRoles.length) {
+    const ids = await User.distinct("_id", { role: { $in: evalRoles } });
+    andClause(q, { evaluator: { $in: ids } });
+  }
+  // Mois de prime (AAAA-MM, plusieurs possibles)
+  const primes = csv(query.primeMonth).filter((m) => PRIME_MONTH_RE.test(m));
+  if (primes.length) andClause(q, { primeMonth: { $in: primes } });
+  // Picking prime (oui / non)
+  if (query.pickingPrime !== undefined && query.pickingPrime !== "") {
+    const pp = String(query.pickingPrime).toLowerCase();
+    if (["true", "1", "yes", "on"].includes(pp)) andClause(q, { pickingPrime: true });
+    if (["false", "0", "no", "off"].includes(pp)) andClause(q, { pickingPrime: { $ne: true } });
+  }
+  // Pickings de contrôle process (plusieurs EPS)
+  if (["1", "true", "yes"].includes(String(query.multiEps || "").toLowerCase())) andClause(q, { "epsList.0": { $exists: true } });
   const v = String(query.validated || "").toLowerCase();
   if (["yes", "true", "1"].includes(v)) andClause(q, { pilotValidated: true });
   if (["no", "false", "0"].includes(v)) andClause(q, { pilotValidated: { $ne: true } });
@@ -88,9 +106,38 @@ async function applyPeriodAndCell(q, query) {
   const range = dateRange(query.dateFrom, query.dateTo);
   if (range) { delete q.$or; q.createdAt = range; }
   if (query.cell) {
-    const ids = await User.distinct("_id", { cell: String(query.cell) });
+    const cells = String(query.cell).split(",").map((s) => s.trim()).filter(Boolean);
+    const ids = await User.distinct("_id", { cell: { $in: cells } });
     q.$and = [...(q.$and || []), { pilot: { $in: ids } }];
   }
+}
+
+// Picking de contrôle process : liste d'EPS dédoublonnée (5 minimum)
+const MIN_PICKING_EPS = 5;
+function processEpsList(raw) {
+  const arr = Array.isArray(raw) ? raw : String(raw || "").split(/[\n,;]+/);
+  return [...new Set(arr.map((x) => String(x || "").trim().slice(0, 120)).filter(Boolean))].slice(0, 100);
+}
+
+// Coaching obligatoire sous ce seuil (liste des besoins : évaluations < 70 %)
+const COACHING_REQUIRED_BELOW = 70;
+/** Ajoute l'état du coaching lié à chaque évaluation (tag « en cours » / « finalisé » / « requis »). */
+async function attachCoachingInfo(rows) {
+  const Coaching = require("../models/Coaching");
+  const ids = rows.map((s) => s._id).filter(Boolean);
+  const list = ids.length ? await Coaching.find({ score: { $in: ids } }).select("score status pilotAcknowledged createdAt").sort({ createdAt: -1 }).lean() : [];
+  const byScore = new Map();
+  for (const c of list) if (!byScore.has(String(c.score))) byScore.set(String(c.score), c);
+  return rows.map((s) => {
+    const c = byScore.get(String(s._id));
+    const pct = Number(s.compliancePercent);
+    const eligible = (s.evaluationType || "standard") !== "calibration";
+    return {
+      ...s,
+      coaching: c ? { _id: c._id, status: c.status, done: c.status === "done", pilotAcknowledged: !!c.pilotAcknowledged } : null,
+      coachingRequired: eligible && Number.isFinite(pct) && pct < COACHING_REQUIRED_BELOW,
+    };
+  });
 }
 
 
@@ -230,6 +277,7 @@ router.post(
         callDirection,
         sampleId,
         primeMonth,
+        epsList,
       } = req.body;
 
       const finalPilotId = pilotId || pilot;
@@ -257,9 +305,20 @@ router.post(
       const closure = String(closureCode || "").trim().slice(0, 120);
       const direction = normalizeDirection(callDirection);
 
-      // Mois de prime obligatoire (sauf calibrage) ; date d'appel obligatoire et différente du jour J
-      const prime = String(primeMonth || "").trim();
-      const primeErr = primeMonthError(prime, evalType);
+      // Picking de contrôle process : plusieurs EPS (minimum 5), sans prime
+      let processEps = null;
+      if (epsList !== undefined && epsList !== null) {
+        const list = processEpsList(epsList);
+        if (list.length < MIN_PICKING_EPS) {
+          return res.status(400).json({ message: `Un picking doit comporter au moins ${MIN_PICKING_EPS} EPS différents.`, code: "PICKING_EPS" });
+        }
+        processEps = list;
+        evalType = "picking";
+      }
+
+      // Mois de prime obligatoire (sauf calibrage et picking process) ; date d'appel obligatoire et différente du jour J
+      const prime = processEps ? "" : String(primeMonth || "").trim();
+      const primeErr = processEps ? "" : primeMonthError(prime, evalType);
       if (primeErr) return res.status(400).json({ message: primeErr, code: "PRIME_MONTH" });
       const callErr = callDateError(callDate, evalType);
       if (callErr) return res.status(400).json({ message: callErr, code: "CALL_DATE" });
@@ -292,8 +351,8 @@ router.post(
 
 
 // 🔔 EPS doublon (même comportement CQ ; le calibrage autorise plusieurs évaluateurs)
-const epsClean = (eps || "").toString().trim();
-if (epsClean) {
+const epsClean = processEps ? processEps.join(", ") : (eps || "").toString().trim();
+if (epsClean && !processEps) {
   const existing = await Score.findOne(epsDuplicateQuery(epsClean, evalType, evaluatorId)).lean();
   if (existing) {
     return res.status(409).json({
@@ -343,7 +402,8 @@ const score = await Score.create({
         primeMonth: evalType === "calibration" ? "" : prime,
 
         eps: epsClean || "",
-        pickingPrime: isTrue(pickingPrime),
+        ...(processEps ? { epsList: processEps } : {}),
+        pickingPrime: processEps ? false : isTrue(pickingPrime),
         callDuration: callDuration || "",
         comment: comment || "",
 
@@ -443,10 +503,28 @@ if (gridTypeForSave === "presence") {
           });
           if (io) io.emit("notification:new", notif);
         } catch (_) {}
+
+        // Évaluation sous 70 % : coaching obligatoire par l'évaluateur
+        try {
+          const pct = Number(populated?.compliancePercent);
+          if (evalType !== "calibration" && Number.isFinite(pct) && pct < COACHING_REQUIRED_BELOW) {
+            const Notification = require("../models/Notification");
+            const notif = await Notification.create({
+              type: "notification",
+              title: "Coaching obligatoire",
+              message: `⚠️ L'évaluation de ${populated?.pilot?.name || "l'agent"} (${populated?.eps || "sans EPS"}) est à ${Math.round(pct)} % : un coaching doit être réalisé.`,
+              targetUsers: [evaluatorId],
+              createdBy: evaluatorId,
+              meta: { scoreId: String(score._id), coachingRequired: true },
+            });
+            if (io) io.emit("notification:new", notif);
+          }
+        } catch (_) {}
       } catch (_) {
         // ignore realtime failures
       }
 
+      if (populated) populated.coachingRequired = evalType !== "calibration" && Number(populated.compliancePercent) < COACHING_REQUIRED_BELOW;
       res.status(201).json(populated);
     } catch (err) {
       console.error("POST /scores error:", err);
@@ -821,7 +899,7 @@ router.get(
         compliancePercent: computeCompliancePercent(s, gridsById.get(String(s.gridId)) || null),
       }));
 
-      res.json({ page, limit, total, items: mapped });
+      res.json({ page, limit, total, items: await attachCoachingInfo(mapped) });
     } catch (err) {
       console.error("GET /scores/mine error:", err);
       res.status(err.status || 500).json({
@@ -1048,7 +1126,7 @@ router.get(
         compliancePercent: computeCompliancePercent(s, gridsById.get(String(s.gridId)) || null),
       }));
 
-      res.json({ page, limit, total, items: mapped });
+      res.json({ page, limit, total, items: await attachCoachingInfo(mapped) });
     } catch (err) {
       console.error("GET /scores error:", err);
       res.status(err.status || 500).json({
@@ -1664,6 +1742,7 @@ router.patch(
         closureCode,
         callDirection,
         primeMonth,
+        epsList,
       } = req.body;
 
       const finalPilot = pilotId || pilot;
@@ -1700,7 +1779,13 @@ if (primeMonth !== undefined) {
   score.primeMonth = pm;
 }
 
-if (eps !== undefined) {
+const isProcessPicking = Array.isArray(score.epsList) && score.epsList.length > 0;
+if (isProcessPicking && epsList !== undefined) {
+  const list = processEpsList(epsList);
+  if (list.length < MIN_PICKING_EPS) return res.status(400).json({ message: `Un picking doit comporter au moins ${MIN_PICKING_EPS} EPS différents.`, code: "PICKING_EPS" });
+  score.epsList = list;
+  score.eps = list.join(", ");
+} else if (eps !== undefined && !isProcessPicking) {
   const epsClean = (eps || "").toString().trim();
   if (epsClean) {
     const existing = await Score.findOne(epsDuplicateQuery(epsClean, normalizeType(score.evaluationType), score.evaluator, id)).lean();

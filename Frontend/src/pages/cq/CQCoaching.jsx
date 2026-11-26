@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import api from "../../api";
 import PageHeader from "../../components/PageHeader.jsx";
 import MultiSelect from "../../components/MultiSelect.jsx";
@@ -7,6 +7,7 @@ import CoachingFilters from "../../components/CoachingFilters.jsx";
 import { initialCoachingFilters, coachingParams } from "../../utils/coachingFilters.js";
 import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
+import CoachingCreateModal from "../../components/CoachingCreateModal.jsx";
 function toISO(d) { if (!d) return ""; const x = new Date(d); return isNaN(x.getTime()) ? "" : `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; }
 function fmtDate(d) { if (!d) return "—"; const x = new Date(d); return isNaN(x.getTime()) ? "—" : x.toLocaleDateString("fr-FR"); }
 function isOverdue(d) { if (!d) return false; return new Date(d) < new Date(new Date().toDateString()); }
@@ -26,24 +27,17 @@ export default function CQCoaching() {
   const requestId = useRef(0);
   const [pilots, setPilots] = useState([]);
 
-  // Create form
+  // Création
   const [creating, setCreating] = useState(false);
-  const [scoreId, setScoreId] = useState("");
-  const [notes, setNotes] = useState("");
-  const [actionPlan, setActionPlan] = useState("");
-  const [status, setStatus] = useState("open");
-  const [followUpDate, setFollowUpDate] = useState("");
-  const [scoresLoading, setScoresLoading] = useState(false);
-  const [scoreOptions, setScoreOptions] = useState([]);
 
   // Edit modal
   const [editing, setEditing] = useState(null);
+  const [editSubject, setEditSubject] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editActionPlan, setEditActionPlan] = useState("");
   const [editStatus, setEditStatus] = useState("open");
   const [editFollowUp, setEditFollowUp] = useState("");
 
-  const pilotOptions = useMemo(() => (pilots || []).map((p) => ({ value: String(p._id), label: `${p.name || ""}${p.cell ? " — " + p.cell : ""}` })), [pilots]);
 
   useEffect(() => {
     api.get("/coaching/filter-options").then((r) => setPilots(r.data?.pilots || [])).catch(() => {});
@@ -67,36 +61,6 @@ export default function CQCoaching() {
     return () => { clearTimeout(timer); ++requestId.current; };
   }, [filters, statusFilter]);
 
-  // Create form — pilot selection
-  const [createPilotId, setCreatePilotId] = useState("");
-
-  // Load scores for creation — filtered by pilot
-  useEffect(() => {
-    if (!creating) return;
-    setScoresLoading(true);
-    // Le calibrage n'est pas une évaluation de l'agent : il n'ouvre pas de coaching
-    const params = { limit: 100, page: 1, evaluationType: "standard,picking,coaching,sample" };
-    if (createPilotId) params.pilotId = createPilotId;
-    api.get("/scores/mine", { params }).then((r) => {
-      setScoreOptions((r.data?.items || []).map((s) => ({
-        value: String(s._id),
-        label: `${s.pilotName || s.pilot?.name || "Agent"} — ${s.eps || "—"} — ${fmtDate(s.createdAt)}`,
-        pilotName: s.pilotName || s.pilot?.name || "",
-        pilotId: String(s.pilot?._id || s.pilotId || ""),
-      })));
-    }).catch(() => {}).finally(() => setScoresLoading(false));
-  }, [creating, createPilotId]);
-
-  async function handleCreate() {
-    setErr("");
-    if (!scoreId) return setErr("Sélectionnez une évaluation.");
-    try {
-      await api.post("/coaching", { scoreId, notes, actionPlan, status, followUpDate: followUpDate || null });
-      setCreating(false); setScoreId(""); setCreatePilotId(""); setNotes(""); setActionPlan(""); setStatus("open"); setFollowUpDate("");
-      loadCoachings();
-    } catch (e) { setErr(e?.response?.data?.message || "Erreur création coaching."); }
-  }
-
   async function handleStatusChange(id, newStatus) {
     try {
       await api.patch(`/coaching/${id}`, { status: newStatus });
@@ -106,6 +70,7 @@ export default function CQCoaching() {
 
   function openEdit(c) {
     setEditing(c);
+    setEditSubject(c.subject || "");
     setEditNotes(c.notes || "");
     setEditActionPlan(c.actionPlan || "");
     setEditStatus(c.status || "open");
@@ -116,7 +81,7 @@ export default function CQCoaching() {
     if (!editing) return;
     try {
       await api.patch(`/coaching/${editing._id}`, {
-        notes: editNotes, actionPlan: editActionPlan, status: editStatus, followUpDate: editFollowUp || null,
+        ...(editSubject.trim() ? { subject: editSubject.trim() } : {}), notes: editNotes, actionPlan: editActionPlan, status: editStatus, followUpDate: editFollowUp || null,
       });
       loadCoachings(page);
       setEditing(null);
@@ -173,18 +138,16 @@ export default function CQCoaching() {
         </div>
         <div style={{ overflow: "auto" }}>
           <table className="data-table">
-            <thead><tr><th>Date</th><th>Agent</th><th>Cellule</th><th>Évaluation</th><th>Statut</th><th>Validation agent</th><th>Relance</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Date</th><th>Agent</th><th>Cellule</th><th>Objet du coaching</th><th>Statut</th><th>Validation agent</th><th>Relance</th><th>Actions</th></tr></thead>
             <tbody>
               {filtered.map((c) => {
                 const pilot = c.pilot?.name || c.score?.pilot?.name || "—";
-                const evalEps = c.score?.eps || "—";
-                const evalDate = fmtDate(c.score?.createdAt);
                 const overdueFlag = c.status !== "done" && isOverdue(c.followUpDate);
                 return (
                   <tr key={c._id}>
                     <td style={{ fontSize: "0.85rem" }}>{fmtDate(c.createdAt)}</td>
                     <td style={{ fontWeight: 600 }}>{pilot}</td><td>{c.pilot?.cell || c.score?.pilot?.cell || "—"}</td>
-                    <td style={{ fontSize: "0.8rem" }}><span style={{ fontFamily: "monospace" }}>{evalEps}</span> <span style={{ color: "var(--muted)" }}>({evalDate})</span></td>
+                    <td style={{ fontSize: "0.85rem", maxWidth: 240 }}>{c.subject || (c.score?.eps ? <span style={{ color: "var(--muted)" }}>Évaluation {c.score.eps} ({fmtDate(c.score?.createdAt)})</span> : "—")}</td>
                     <td>
                       <Select className="input" value={c.status} onChange={(e) => handleStatusChange(c._id, e.target.value)} style={{ padding: "3px 8px", fontSize: "0.8rem", width: 120 }}>
                         <option value="open">Ouvert</option>
@@ -225,58 +188,7 @@ export default function CQCoaching() {
         <button className="btn btn--ghost" disabled={loading || page*50 >= total} onClick={() => loadCoachings(page+1)}>Suivant</button>
       </div>
       {/* Create Modal */}
-      {creating && (
-        <div className="modal-overlay" onClick={() => setCreating(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
-            <div style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: 16 }}>Nouveau coaching</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <div className="label" style={{ marginBottom: 4 }}>Agent (pilote)</div>
-                <Select className="input" value={createPilotId} onChange={(e) => { setCreatePilotId(e.target.value); setScoreId(""); }}>
-                  <option value="">Tous les agents</option>
-                  {pilotOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
-              </div>
-              <div>
-                <div className="label" style={{ marginBottom: 4 }}>Évaluation liée</div>
-                <Select className="input" value={scoreId} onChange={(e) => setScoreId(e.target.value)}>
-                  <option value="">{scoresLoading ? "Chargement…" : "Sélectionner une évaluation"}</option>
-                  {scoreOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
-                {createPilotId && scoreOptions.length === 0 && !scoresLoading && (
-                  <div style={{ fontSize: "0.78rem", color: "var(--warning)", marginTop: 4 }}>Aucune évaluation trouvée pour cet agent.</div>
-                )}
-              </div>
-              <div>
-                <div className="label" style={{ marginBottom: 4 }}>Notes / Observations</div>
-                <textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Points observés durant l'écoute…" />
-              </div>
-              <div>
-                <div className="label" style={{ marginBottom: 4 }}>Plan d'action</div>
-                <textarea className="input" rows={3} value={actionPlan} onChange={(e) => setActionPlan(e.target.value)} placeholder="Actions correctives à mettre en place…" />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div>
-                  <div className="label" style={{ marginBottom: 4 }}>Statut</div>
-                  <Select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
-                    <option value="open">Ouvert</option>
-                    <option value="in_progress">En cours</option>
-                    <option value="done">Terminé</option>
-                  </Select>
-                </div>
-                <div>
-                  <div className="label" style={{ marginBottom: 4 }}>Date de relance</div>
-                  <input className="input" type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button className="btn btn--ghost" onClick={() => setCreating(false)}>Annuler</button>
-              <button className="btn" onClick={handleCreate}>Créer</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {creating && <CoachingCreateModal pilots={pilots} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); loadCoachings(); }} />}
 
       {/* Edit Modal */}
       {editing && (
@@ -284,9 +196,13 @@ export default function CQCoaching() {
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: 4 }}>Coaching — {editing.pilot?.name || "Agent"}</div>
             <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginBottom: 16 }}>
-              Évaluation : {editing.score?.eps || "—"} • {fmtDate(editing.score?.createdAt)} • Score : {Number(editing.score?.compliancePercent || editing.score?.total || 0).toFixed(1)}%
+              {editing.score ? <>Évaluation liée : {editing.score?.eps || "—"} • {fmtDate(editing.score?.createdAt)}</> : "Aucune évaluation liée"}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <div className="label" style={{ marginBottom: 4 }}>Objet du coaching</div>
+                <input className="input" value={editSubject} maxLength={300} onChange={(e) => setEditSubject(e.target.value)} />
+              </div>
               <div>
                 <div className="label" style={{ marginBottom: 4 }}>Notes / Observations</div>
                 <textarea className="input" rows={4} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />

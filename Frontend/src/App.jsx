@@ -11,6 +11,7 @@ import TrainingPage from "./pages/TrainingPage.jsx";
 import SupervisionDashboard from "./pages/SupervisionDashboard.jsx";
 import ContestationsPage from "./pages/shared/ContestationsPage.jsx";
 import TeamPage from "./pages/shared/TeamPage.jsx";
+import DashboardIndicators from "./pages/kpi/DashboardIndicators.jsx";
 
 import { ThemeProvider } from "./theme/theme.js";
 import { ToastProvider } from "./toast/ToastProvider.jsx";
@@ -123,8 +124,7 @@ function App() {
               onClick: () => setAdminTab("coaching"),
             },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: adminTab === "calibrations", onClick: () => setAdminTab("calibrations") },
-            { key: "samples", label: "Échantillons", icon: <FiLayers />, active: adminTab === "samples", onClick: () => setAdminTab("samples") },
-            { key: "kpi", label: "Indicateurs qualité", icon: <FiPieChart />, active: adminTab === "kpi", onClick: () => setAdminTab("kpi") },
+            { key: "samples", label: "Picking", icon: <FiLayers />, active: adminTab === "samples", onClick: () => setAdminTab("samples") },
             { key: "cqprogress", label: "Avancement écoutes", icon: <FiTrendingUp />, active: adminTab === "cqprogress", onClick: () => setAdminTab("cqprogress") },
             { key: "contestations", label: "Contestations", icon: <FiAlertTriangle />, active: adminTab === "contestations", onClick: () => setAdminTab("contestations") },
           ],
@@ -197,6 +197,7 @@ function App() {
         {
           title: "WORKSPACE",
           items: [
+            { key: "dashboard", label: "Tableau de bord", icon: <FiPieChart />, active: cqView === "dashboard", onClick: () => setCqView("dashboard") },
             { key: "cqprogress", label: "Avancement écoutes", icon: <FiTrendingUp />, active: cqView === "cqprogress", onClick: () => setCqView("cqprogress") },
             { key: "performance", label: "Performance agents", icon: <FiBarChart2 />, active: cqView === "performance", onClick: () => setCqView("performance") },
             {
@@ -225,7 +226,7 @@ function App() {
             },
             { key: "contestations", label: "Contestations", icon: <FiAlertTriangle />, active: cqView === "contestations", onClick: () => setCqView("contestations") },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: cqView === "calibrations" || cqView === "calibration_new", onClick: () => setCqView("calibrations") },
-            { key: "samples", label: "Échantillons", icon: <FiLayers />, active: cqView === "samples" || cqView === "sample_eval", onClick: () => setCqView("samples") },
+            { key: "samples", label: "Picking", icon: <FiLayers />, active: ["samples", "sample_eval", "picking_new"].includes(cqView), onClick: () => setCqView("samples") },
             {
               key: "coaching",
               label: "Coaching",
@@ -283,7 +284,7 @@ function App() {
             { key: "picking", label: "Appels à évaluer", icon: <FiPhone />, active: formateurView === "picking", onClick: () => setFormateurView("picking") },
             { key: "contestations", label: "Contestations", icon: <FiAlertTriangle />, active: formateurView === "contestations", onClick: () => setFormateurView("contestations") },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: formateurView === "calibrations" || formateurView === "calibration_new", onClick: () => setFormateurView("calibrations") },
-            { key: "samples", label: "Échantillons", icon: <FiLayers />, active: formateurView === "samples" || formateurView === "sample_eval", onClick: () => setFormateurView("samples") },
+            { key: "samples", label: "Picking", icon: <FiLayers />, active: ["samples", "sample_eval", "picking_new"].includes(formateurView), onClick: () => setFormateurView("samples") },
             { key: "cqprogress", label: "Avancement écoutes", icon: <FiTrendingUp />, active: formateurView === "cqprogress", onClick: () => setFormateurView("cqprogress") },
             { key: "coaching", label: "Coaching", icon: <FiHeadphones />, active: formateurView === "coaching", onClick: () => setFormateurView("coaching") },
             { key: "grids", label: "Grilles", icon: <FiGrid />, active: formateurView === "grids", onClick: () => setFormateurView("grids") },
@@ -357,7 +358,7 @@ function App() {
           {pilotView === "training" ? <TrainingPage />
             : pilotView === "evaluations" ? <PilotEvaluations />
             : pilotView === "coachings" ? <PilotCoachingsPage />
-            : <PilotDashboard />}
+            : <><DashboardIndicators role="pilote" title="Mes indicateurs qualité" /><PilotDashboard /></>}
         </AppShell>
       );
     }
@@ -403,8 +404,7 @@ function App() {
               onClick: () => setMgmtView("picking"),
             },
             { key: "calibrations", label: "Calibrages", icon: <FiTarget />, active: mgmtView === "calibrations" || mgmtView === "calibration_new", onClick: () => setMgmtView("calibrations") },
-            { key: "samples", label: "Échantillons", icon: <FiLayers />, active: mgmtView === "samples" || mgmtView === "sample_eval", onClick: () => setMgmtView("samples") },
-            ...(user.role === "superviseur" ? [mItem("kpi", "Indicateurs qualité", <FiPieChart />)] : []),
+            { key: "samples", label: "Picking", icon: <FiLayers />, active: ["samples", "sample_eval", "picking_new"].includes(mgmtView), onClick: () => setMgmtView("samples") },
             mItem("cqprogress", "Avancement écoutes", <FiTrendingUp />),
             mItem("contestations", "Contestations", <FiAlertTriangle />),
             ...(teamLabel ? [mItem("team", teamLabel, <FiUsers />)] : []),
@@ -444,7 +444,7 @@ function App() {
             item("cqprogress", "Avancement écoutes", <FiTrendingUp />),
             item("evaluations", "Évaluations", <FiList />),
             item("calibrations", "Calibrages", <FiTarget />),
-            item("samples", "Échantillons", <FiLayers />),
+            item("samples", "Picking", <FiLayers />),
             item("coaching", "Coaching", <FiHeadphones />),
             item("performance", "Performance agents", <FiBarChart2 />),
             item("training", "Formations & Quiz", <FiBookOpen />),

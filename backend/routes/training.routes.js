@@ -17,6 +17,21 @@ function parseDueDate(v) {
   return d;
 }
 
+// Délai de passation (minutes) : 0 = sans limite ; undefined = invalide
+function parseTimeLimit(v) {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0 || n > 600) return undefined;
+  return Math.round(n);
+}
+// Seuls les fichiers déposés dans /uploads/training sont acceptés comme support
+function uploadedPath(v) {
+  const s = String(v || "").trim();
+  return /^\/uploads\/training\/[\w.-]+$/.test(s) ? s : "";
+}
+// Marge réseau tolérée après la fin du délai de passation
+const QUIZ_GRACE_MS = 60 * 1000;
+
 // === Multer config ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -34,7 +49,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (/\.(mp4|webm|mov|avi|mkv|pdf)$/i.test(path.extname(file.originalname))) cb(null, true);
+    if (/\.(mp4|webm|mov|avi|mkv|pdf|ppt|pptx|pps|ppsx)$/i.test(path.extname(file.originalname))) cb(null, true);
     else cb(new Error("Format non supporté."));
   },
 });
@@ -43,11 +58,43 @@ const upload = multer({
 //  STATIC ROUTES (must be declared BEFORE /:id to avoid param collision)
 // ======================================================================
 
-/** POST /training/upload — Upload video/PDF file */
-router.post("/upload", permit("admin", "formateur"), upload.single("file"), (req, res) => {
+/**
+ * Conversion PowerPoint -> PDF (LibreOffice headless) pour l'affichage dans l'application.
+ * Retourne le chemin du PDF, ou "" si LibreOffice n'est pas disponible / la conversion échoue.
+ */
+function convertToPdf(filePath) {
+  const { execFile } = require("child_process");
+  const dir = path.dirname(filePath);
+  const bins = [process.env.SOFFICE_BIN, "soffice", "libreoffice"].filter(Boolean);
+  return new Promise((resolve) => {
+    const tryBin = (i) => {
+      if (i >= bins.length) return resolve("");
+      execFile(bins[i], ["--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, filePath], { timeout: 180000 }, (err) => {
+        const out = path.join(dir, `${path.basename(filePath, path.extname(filePath))}.pdf`);
+        if (!err && require("fs").existsSync(out)) return resolve(out);
+        tryBin(i + 1);
+      });
+    };
+    tryBin(0);
+  });
+}
+
+/** POST /training/upload — Dépôt d'une vidéo, d'un PDF ou d'un PowerPoint */
+router.post("/upload", permit("admin", "formateur"), upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Aucun fichier." });
-    res.json({ url: `/uploads/training/${req.file.filename}`, filename: req.file.originalname, size: req.file.size });
+    const url = `/uploads/training/${req.file.filename}`;
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const fileType = ext === ".pdf" ? "pdf" : /^\.pp[st]x?$/.test(ext) ? "ppt" : "video";
+    const out = { url, filename: req.file.originalname, size: req.file.size, fileType };
+    if (fileType === "ppt") {
+      const pdf = await convertToPdf(req.file.path);
+      out.viewUrl = pdf ? `/uploads/training/${path.basename(pdf)}` : "";
+      out.converted = !!pdf;
+    } else if (fileType === "pdf") {
+      out.viewUrl = url;
+    }
+    res.json(out);
   } catch (err) {
     res.status(500).json({ message: err.message || "Erreur upload." });
   }
@@ -170,14 +217,18 @@ router.get("/", async (req, res) => {
 /** POST /training — Create training */
 router.post("/", permit("admin", "formateur"), async (req, res) => {
   try {
-    const { title, description, pdfUrl, pdfData, videoUrl, category, roles, targetCells, targetUsers, questions, allowMultipleAttempts, passThreshold } = req.body;
+    const { title, description, pdfUrl, pdfData, videoUrl, category, roles, targetCells, targetUsers, questions, allowMultipleAttempts, passThreshold, fileUrl, fileName, fileType } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ message: "Titre obligatoire." });
+    const timeLimitMinutes = parseTimeLimit(req.body.timeLimitMinutes);
+    if (timeLimitMinutes === undefined) return res.status(400).json({ message: "Délai de passation invalide (0 à 600 minutes)." });
     const dueDate = parseDueDate(req.body.dueDate);
     if (dueDate === undefined) return res.status(400).json({ message: "Date d'échéance invalide." });
 
     const t = await Training.create({
       title: title.trim(), description: description || "", pdfUrl: pdfUrl || "", pdfData: pdfData || "",
       videoUrl: videoUrl || "", category: category || "",
+      fileUrl: uploadedPath(fileUrl), fileName: String(fileName || "").slice(0, 200), fileType: ["pdf", "ppt"].includes(fileType) ? fileType : "",
+      timeLimitMinutes,
       roles: Array.isArray(roles) ? roles : [], targetCells: Array.isArray(targetCells) ? targetCells : [],
       targetUsers: Array.isArray(targetUsers) ? targetUsers : [],
       allowMultipleAttempts: allowMultipleAttempts !== false,
@@ -232,6 +283,14 @@ router.patch("/:id", permit("admin", "formateur"), async (req, res) => {
     if (pdfUrl !== undefined) update.pdfUrl = String(pdfUrl);
     if (pdfData !== undefined) update.pdfData = String(pdfData);
     if (videoUrl !== undefined) update.videoUrl = String(videoUrl);
+    if (req.body.fileUrl !== undefined) update.fileUrl = uploadedPath(req.body.fileUrl);
+    if (req.body.fileName !== undefined) update.fileName = String(req.body.fileName || "").slice(0, 200);
+    if (req.body.fileType !== undefined) update.fileType = ["pdf", "ppt"].includes(req.body.fileType) ? req.body.fileType : "";
+    if (req.body.timeLimitMinutes !== undefined) {
+      const tl = parseTimeLimit(req.body.timeLimitMinutes);
+      if (tl === undefined) return res.status(400).json({ message: "Délai de passation invalide (0 à 600 minutes)." });
+      update.timeLimitMinutes = tl;
+    }
     if (category !== undefined) update.category = String(category);
     if (roles !== undefined) update.roles = Array.isArray(roles) ? roles : [];
     if (targetCells !== undefined) update.targetCells = Array.isArray(targetCells) ? targetCells : [];
@@ -260,10 +319,11 @@ router.delete("/:id", permit("admin"), async (req, res) => {
     const t = await Training.findById(req.params.id);
     if (!t) return res.status(404).json({ message: "Formation introuvable." });
 
-    // Cleanup uploaded video
-    if (t.videoUrl && t.videoUrl.startsWith("/uploads/")) {
-      const fs = require("fs");
-      const filePath = path.join(__dirname, "..", t.videoUrl);
+    // Cleanup uploaded video / support (et le PDF converti d'un PowerPoint)
+    const fs = require("fs");
+    const files = [t.videoUrl, t.fileUrl, t.fileType === "ppt" ? t.pdfUrl : ""].filter((u) => u && u.startsWith("/uploads/"));
+    for (const u of files) {
+      const filePath = path.join(__dirname, "..", u);
       if (fs.existsSync(filePath)) try { fs.unlinkSync(filePath); } catch (_) {}
     }
 
@@ -281,16 +341,17 @@ router.post("/:id/start", async (req, res) => {
     const mongoose = require("mongoose");
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: "ID invalide." });
     const userId = req.user.id || req.user._id;
-    const t = await Training.findById(req.params.id).select("allowMultipleAttempts attempts.user").lean();
+    const t = await Training.findById(req.params.id).select("allowMultipleAttempts attempts.user timeLimitMinutes").lean();
     if (!t) return res.status(404).json({ message: "Formation introuvable." });
     if (t.allowMultipleAttempts === false && (t.attempts || []).some((a) => String(a.user) === String(userId))) {
       return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé.", canAttempt: false });
     }
-    await Training.updateOne(
-      { _id: req.params.id, "starts.user": { $ne: userId } },
-      { $push: { starts: { user: userId, startedAt: new Date() } } }
-    );
-    res.json({ ok: true });
+    // Chaque passage redémarre le chronomètre (délai de passation)
+    const startedAt = new Date();
+    await Training.updateOne({ _id: req.params.id }, { $pull: { starts: { user: userId } } });
+    await Training.updateOne({ _id: req.params.id }, { $push: { starts: { user: userId, startedAt } } });
+    const limit = Number(t.timeLimitMinutes) || 0;
+    res.json({ ok: true, startedAt, timeLimitMinutes: limit, deadline: limit ? new Date(startedAt.getTime() + limit * 60000) : null });
   } catch (err) {
     console.error("POST /training/:id/start error:", err);
     res.status(500).json({ message: "Erreur." });
@@ -314,6 +375,19 @@ router.post("/:id/attempt", async (req, res) => {
     const { answers } = req.body;
     if (!Array.isArray(answers)) return res.status(400).json({ message: "Réponses requises." });
 
+    // Délai de passation : au-delà (marge réseau comprise), la tentative est refusée
+    const limitMin = Number(t.timeLimitMinutes) || 0;
+    let timedOut = false;
+    if (limitMin > 0) {
+      const st = (t.starts || []).find((x) => String(x.user) === userId);
+      if (!st) return res.status(400).json({ message: "Démarrez le quiz avant d'envoyer vos réponses." });
+      const elapsed = Date.now() - new Date(st.startedAt).getTime();
+      if (elapsed > limitMin * 60000 + QUIZ_GRACE_MS) {
+        return res.status(403).json({ message: `Délai de passation dépassé (${limitMin} min). Réponses non enregistrées.`, code: "QUIZ_TIMEOUT" });
+      }
+      timedOut = elapsed > limitMin * 60000;
+    }
+
     let score = 0;
     const total = (t.questions || []).length;
     (t.questions || []).forEach((q, idx) => { if (answers[idx] === q.correctIndex) score++; });
@@ -321,7 +395,7 @@ router.post("/:id/attempt", async (req, res) => {
     const percent = total > 0 ? Math.round((score / total) * 100) : 0;
     const threshold = Number.isFinite(t.passThreshold) ? t.passThreshold : 80;
 
-    const attempt = { user: req.user.id || req.user._id, answers, score, total, completedAt: new Date() };
+    const attempt = { user: req.user.id || req.user._id, answers, score, total, completedAt: new Date(), timedOut };
     // Écriture atomique : en tentative unique, la condition empêche un double envoi simultané
     const cond = { _id: t._id };
     if (t.allowMultipleAttempts === false) cond["attempts.user"] = { $ne: attempt.user };

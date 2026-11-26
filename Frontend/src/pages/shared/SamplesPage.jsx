@@ -136,7 +136,7 @@ export default function SamplesPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Évaluations d'échantillons"
+        title="Échantillons & suivi"
         subtitle="Sélection des appels à évaluer, grille associée, affectation et suivi de l'avancement."
         right={canWrite ? <button className="btn" type="button" onClick={() => setAdding(true)}>+ Ajouter des appels</button> : null}
       />

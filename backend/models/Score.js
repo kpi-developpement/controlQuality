@@ -32,6 +32,8 @@ const ScoreSchema = new mongoose.Schema(
     callDate: { type: Date, default: null },
     interactionDate: { type: Date, default: null },
     eps: { type: String, default: "" },
+    // Picking de contrôle process : plusieurs EPS (5 minimum), sans prime
+    epsList: { type: [String], default: undefined },
     // ✅ New (backward compatible): optional feature flag per evaluation
     pickingPrime: { type: Boolean, default: false },
     callDuration: { type: String, default: "" },

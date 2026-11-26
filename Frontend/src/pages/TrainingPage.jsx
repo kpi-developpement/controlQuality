@@ -9,6 +9,9 @@ const canManage = () => ["admin", "formateur"].includes(getUser()?.role);
 const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d); return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("fr-FR"); };
 const fmtFull = (d) => { if (!d) return "—"; const dt = new Date(d); return isNaN(dt.getTime()) ? "—" : dt.toLocaleString("fr-FR"); };
 const uid = () => Math.random().toString(36).slice(2);
+// Fichiers déposés sur le serveur : servis par le backend
+const fileHref = (u) => (u && u.startsWith("/uploads/") ? `${BACKEND_ORIGIN}${u}` : u);
+const fmtClock = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
 
 export default function TrainingPage() {
   const [tab, setTab] = useState("list"); // list (formations), quiz, history, stats
@@ -21,8 +24,12 @@ export default function TrainingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null); // training to edit
-  const [form, setForm] = useState({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "" });
+  const [form, setForm] = useState({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "", fileUrl: "", fileName: "", fileType: "", timeLimitMinutes: 0 });
   const [pdfFile, setPdfFile] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  // Délai de passation : échéance et temps restant
+  const [deadline, setDeadline] = useState(null);
+  const [now, setNow] = useState(Date.now());
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -61,43 +68,74 @@ export default function TrainingPage() {
   async function startQuiz() {
     if (!selected?._id) return;
     setErr("");
+    let dl = null;
     try {
-      await api.post(`/training/${selected._id}/start`, {}, { toast: false });
+      const r = await api.post(`/training/${selected._id}/start`, {}, { toast: false });
+      dl = r.data?.deadline ? new Date(r.data.deadline).getTime() : null;
     } catch (e) {
       if (e?.response?.status === 403) {
         setQuizResult({ blocked: true, blockedMsg: e.response.data?.message || "Quiz déjà passé." });
         return;
       }
+      if (Number(selected.timeLimitMinutes) > 0) { setErr("Impossible de démarrer le quiz chronométré. Réessayez."); return; }
     }
+    setDeadline(dl); setNow(Date.now());
     setQuizMode(true); setQuizResult(null); setQuizAnswers((selected.questions || []).map(() => -1));
   }
   async function submitQuiz() {
-    if (!selected?._id) return; setSubmitting(true); setErr("");
+    if (!selected?._id || submitting) return; setSubmitting(true); setErr("");
     try {
       const res = await api.post(`/training/${selected._id}/attempt`, { answers: quizAnswers });
-      setQuizResult(res.data);
+      setQuizResult(res.data); setDeadline(null);
       setSelected((cur) => cur ? { ...cur, myAttempts: (cur.myAttempts || 0) + 1, myLastPercent: res.data?.percent, canAttempt: cur.allowMultipleAttempts !== false } : cur);
       loadList();
     } catch (e) {
       const msg = e?.response?.data?.message || "Erreur.";
       if (e?.response?.status === 403) {
-        setQuizResult({ score: 0, total: 0, percent: 0, passed: false, threshold: selected.passThreshold || 80, blocked: true, blockedMsg: msg });
-        setQuizMode(false);
+        setQuizResult({ score: 0, total: 0, percent: 0, passed: false, threshold: selected.passThreshold || 80, blocked: true, blockedMsg: msg, timeout: e.response.data?.code === "QUIZ_TIMEOUT" });
+        setQuizMode(false); setDeadline(null);
       } else { setErr(msg); }
     } finally { setSubmitting(false); }
   }
+  // Chronomètre : décompte, puis envoi automatique des réponses à l'échéance
+  useEffect(() => {
+    if (!quizMode || !deadline) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [quizMode, deadline]);
+  const remaining = deadline ? deadline - now : null;
+  useEffect(() => {
+    if (quizMode && deadline && remaining !== null && remaining <= 0 && !submitting && !quizResult) submitQuiz();
+  }, [remaining, quizMode, deadline]);
+
+  async function uploadDoc(file) {
+    if (!file) return;
+    setMsg(""); setErr(""); setUploadingDoc(true);
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const r = await api.post("/training/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const d = r.data || {};
+      if (d.fileType === "video") { setErr("Déposez la vidéo dans le champ « Vidéo »."); return; }
+      setPdfFile(null);
+      setForm((f) => ({ ...f, fileUrl: d.url || "", fileName: d.filename || file.name, fileType: d.fileType || "", pdfUrl: d.viewUrl || "" }));
+      if (d.fileType === "ppt" && !d.converted) setMsg("PowerPoint déposé. La conversion pour l'affichage n'est pas disponible sur ce serveur : le fichier sera proposé au téléchargement.");
+      else setMsg(`${d.fileType === "ppt" ? "PowerPoint" : "PDF"} déposé (${(file.size / 1024 / 1024).toFixed(1)} MB) — consultable dans l'application.`);
+    } catch (ex) { setErr(ex?.response?.data?.message || "Erreur lors du dépôt du fichier."); }
+    finally { setUploadingDoc(false); }
+  }
+
   async function loadResults(id) {
     try { setResults((await api.get(`/training/${id}/results`)).data); setResultsFor(id); } catch {}
   }
 
   // Form helpers
-  function resetForm() { setForm({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "" }); setPdfFile(null); }
+  function resetForm() { setForm({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "", fileUrl: "", fileName: "", fileType: "", timeLimitMinutes: 0 }); setPdfFile(null); }
   function openCreate(kind = "formation") {
     resetForm(); setEditing(null); setCreating(true); setMsg(""); setErr("");
     if (kind === "quiz") setForm((f) => ({ ...f, questions: [{ _lid: uid(), question: "", imageData: "", options: ["", ""], correctIndex: 0 }] }));
   }
   function openEdit(t) {
-    setForm({ title: t.title || "", description: t.description || "", pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "", category: t.category || "", roles: t.roles || [], targetCells: t.targetCells || [], targetUsers: (t.targetUsers || []).map((u) => typeof u === "string" ? u : u._id || u), questions: (t.questions || []).map((q) => ({ ...q, _lid: uid() })), allowMultipleAttempts: t.allowMultipleAttempts !== false, passThreshold: Number.isFinite(t.passThreshold) ? t.passThreshold : 80, dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : "" });
+    setForm({ title: t.title || "", description: t.description || "", pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "", category: t.category || "", roles: t.roles || [], targetCells: t.targetCells || [], targetUsers: (t.targetUsers || []).map((u) => typeof u === "string" ? u : u._id || u), questions: (t.questions || []).map((q) => ({ ...q, _lid: uid() })), allowMultipleAttempts: t.allowMultipleAttempts !== false, passThreshold: Number.isFinite(t.passThreshold) ? t.passThreshold : 80, dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : "", fileUrl: t.fileUrl || "", fileName: t.fileName || "", fileType: t.fileType || "", timeLimitMinutes: Number(t.timeLimitMinutes) || 0 });
     setEditing(t); setCreating(true); setMsg(""); setErr("");
   }
 
@@ -185,17 +223,25 @@ export default function TrainingPage() {
             {/* PDF viewer */}
             {(selected.pdfData || selected.pdfUrl) && (
               <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <iframe src={selected.pdfData || selected.pdfUrl} style={{ width: "100%", height: "70vh", border: "none" }} title="PDF" />
+                {selected.fileName && <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", fontWeight: 700, fontSize: "0.85rem" }}><Ico n="file" /> {selected.fileName}{selected.fileType === "ppt" ? " (PowerPoint affiché en PDF)" : ""}</div>}
+                <iframe src={selected.pdfData || fileHref(selected.pdfUrl)} style={{ width: "100%", height: "70vh", border: "none" }} title={selected.fileName || "Support de formation"} />
               </div>
             )}
-            {!selected.videoUrl && !selected.pdfData && !selected.pdfUrl && (
+            {selected.fileUrl && (
+              <div><a className="btn btn--ghost btn--sm" href={fileHref(selected.fileUrl)} target="_blank" rel="noreferrer" download={selected.fileName || undefined}><Ico n="file" /> Télécharger le fichier d'origine{selected.fileName ? ` (${selected.fileName})` : ""}</a></div>
+            )}
+            {!selected.videoUrl && !selected.pdfData && !selected.pdfUrl && !selected.fileUrl && (
               <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Aucun document associé.</div>
             )}
           </div>
         )}
         {quizMode && !quizResult && (
           <div className="card" style={{ padding: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: "0.95rem", marginBottom: 16 }}><Ico n="edit" /> Quiz — {selected.title}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16, position: "sticky", top: 0, zIndex: 2, background: "var(--panel)", paddingBottom: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem" }}><Ico n="edit" /> Quiz — {selected.title}</div>
+              {deadline && <span role="timer" aria-live="polite" className={`badge ${remaining <= 60000 ? "badge--danger" : remaining <= 300000 ? "badge--warning" : "badge--primary"}`} style={{ fontSize: "0.9rem", fontVariantNumeric: "tabular-nums" }}><Ico n="clock" /> Temps restant {fmtClock(remaining)}</span>}
+            </div>
+            {deadline && <div style={{ fontSize: "0.8rem", color: "var(--muted)", marginTop: -8, marginBottom: 12 }}>Délai de passation : {selected.timeLimitMinutes} min. À l'échéance, vos réponses sont envoyées automatiquement.</div>}
             {(selected.questions || []).map((q, qi) => (
               <div key={qi} style={{ marginBottom: 20, padding: "14px 16px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--panel-2)" }}>
                 <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: 10 }}>{qi + 1}. {q.question}</div>
@@ -211,7 +257,7 @@ export default function TrainingPage() {
               </div>
             ))}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn btn--ghost" onClick={() => setQuizMode(false)}>Annuler</button>
+              {!deadline && <button className="btn btn--ghost" onClick={() => setQuizMode(false)}>Annuler</button>}
               <button className="btn" onClick={submitQuiz} disabled={submitting || quizAnswers.includes(-1)}>{submitting ? "Envoi…" : "Soumettre"}</button>
             </div>
           </div>
@@ -221,7 +267,7 @@ export default function TrainingPage() {
             {quizResult.blocked ? (
               <>
                 <div style={{ fontSize: "2.5rem", marginBottom: 8 }}><Ico n="slash" /></div>
-                <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--warning)" }}>Quiz déjà passé</div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--warning)" }}>{quizResult.timeout ? "Délai de passation dépassé" : "Quiz déjà passé"}</div>
                 <div style={{ fontSize: "0.9rem", color: "var(--muted)", marginTop: 8, maxWidth: 400, margin: "8px auto 0" }}>{quizResult.blockedMsg}</div>
                 <div style={{ marginTop: 16 }}><button className="btn" onClick={() => setSelected(null)}>Retour</button></div>
               </>
@@ -235,7 +281,7 @@ export default function TrainingPage() {
                 </div>
                 <div style={{ marginTop: 16, display: "flex", justifyContent: "center", gap: 8 }}>
                   {selected.allowMultipleAttempts !== false && (
-                    <button className="btn btn--ghost" onClick={() => { setQuizMode(true); setQuizResult(null); setQuizAnswers((selected.questions || []).map(() => -1)); }}>Recommencer</button>
+                    <button className="btn btn--ghost" onClick={startQuiz}>Recommencer</button>
                   )}
                   {selected.allowMultipleAttempts === false && (
                     <div style={{ fontSize: "0.82rem", color: "var(--muted)", padding: "6px 0" }}>Une seule tentative autorisée.</div>
@@ -336,7 +382,8 @@ export default function TrainingPage() {
                     {(t.questions || []).length > 0 && <span className="badge badge--muted" style={{ fontSize: "0.72rem" }}>Seuil: {t.passThreshold ?? 80}%</span>}
                     {(t.questions || []).length > 0 && t.allowMultipleAttempts === false && <span className="badge badge--warning" style={{ fontSize: "0.72rem" }}>1 tentative</span>}
                     {!canManage() && (t.questions || []).length > 0 && t.myAttempts > 0 && <span className="badge badge--success" style={{ fontSize: "0.72rem" }}><Ico n="check" /> Passé — {t.myLastPercent}%</span>}
-                    {(t.pdfUrl || t.pdfData) && <span className="badge badge--muted" style={{ fontSize: "0.72rem" }}><Ico n="file" /> PDF</span>}
+                    {(t.pdfUrl || t.pdfData || t.fileUrl) && <span className="badge badge--muted" style={{ fontSize: "0.72rem" }}><Ico n="file" /> {t.fileType === "ppt" ? "PowerPoint" : "PDF"}</span>}
+                    {(t.questions || []).length > 0 && Number(t.timeLimitMinutes) > 0 && <span className="badge badge--warning" style={{ fontSize: "0.72rem" }}><Ico n="clock" /> {t.timeLimitMinutes} min</span>}
                     {t.videoUrl && <span className="badge badge--primary" style={{ fontSize: "0.72rem" }}><Ico n="video" /> Vidéo</span>}
                     <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{fmtDate(t.createdAt)}</span>
                   </div>
@@ -405,8 +452,13 @@ export default function TrainingPage() {
               </div>
               <div><div className="label" style={{ marginBottom: 4 }}>Description</div><textarea className="input" rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div><div className="label" style={{ marginBottom: 4 }}>PDF (fichier)</div><input type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} style={{ fontSize: "0.85rem" }} /></div>
-                <div><div className="label" style={{ marginBottom: 4 }}>ou URL du PDF</div><input className="input" value={form.pdfUrl} onChange={(e) => setForm((f) => ({ ...f, pdfUrl: e.target.value }))} placeholder="https://…" /></div>
+                <div>
+                  <div className="label" style={{ marginBottom: 4 }}>Support PDF ou PowerPoint</div>
+                  <input type="file" accept=".pdf,.ppt,.pptx,.pps,.ppsx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" disabled={uploadingDoc} onChange={(e) => uploadDoc(e.target.files?.[0])} style={{ fontSize: "0.85rem" }} />
+                  <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 4 }}>{uploadingDoc ? "Dépôt et conversion en cours…" : "Visualisé directement dans l'application (PowerPoint converti en PDF)."}</div>
+                  {form.fileUrl && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}><span className="badge badge--success" style={{ fontSize: "0.72rem" }}><Ico n="checkCircle" /> {form.fileName || "Fichier déposé"}</span><button type="button" className="btn btn--ghost btn--sm" aria-label="Retirer le fichier" onClick={() => setForm((f) => ({ ...f, fileUrl: "", fileName: "", fileType: "", pdfUrl: "" }))}><Ico n="x" /></button></div>}
+                </div>
+                <div><div className="label" style={{ marginBottom: 4 }}>ou URL d'un PDF</div><input className="input" value={form.fileUrl ? "" : form.pdfUrl} disabled={!!form.fileUrl} onChange={(e) => setForm((f) => ({ ...f, pdfUrl: e.target.value }))} placeholder="https://…" /></div>
               </div>
               <div>
                 <div className="label" style={{ marginBottom: 4 }}><Ico n="video" /> Vidéo</div>
@@ -496,6 +548,14 @@ export default function TrainingPage() {
                     <div className="label" style={{ marginBottom: 4 }}>Échéance du quiz (facultative)</div>
                     <input className="input" type="date" value={form.dueDate || ""} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} style={{ maxWidth: 180 }} />
                     <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 4 }}>Après cette date, un quiz non passé est compté « échu ».</div>
+                  </div>
+                  <div>
+                    <div className="label" style={{ marginBottom: 4 }}>Délai de passation (minutes)</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input className="input" type="number" min="0" max="600" value={form.timeLimitMinutes || 0} onChange={(e) => setForm((f) => ({ ...f, timeLimitMinutes: Math.max(0, Math.min(600, Math.round(Number(e.target.value) || 0))) }))} style={{ width: 90, textAlign: "center" }} />
+                      <span style={{ fontSize: "0.82rem", color: "var(--muted)" }}>min (0 = sans limite)</span>
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 4 }}>Chronomètre affiché pendant le quiz ; envoi automatique à l'échéance.</div>
                   </div>
                   <div>
                     <div className="label" style={{ marginBottom: 4 }}>Seuil de réussite (%)</div>
