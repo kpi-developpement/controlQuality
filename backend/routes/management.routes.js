@@ -100,9 +100,6 @@ router.post(
       if (!evaluator || !["cq", "formateur"].includes(evaluator.role)) {
         return res.status(400).json({ message: "Contestation autorisée uniquement sur les évaluations réalisées par un CQ." });
       }
-      if (score.evaluationType === "calibration") {
-        return res.status(400).json({ message: "Un calibrage ne peut pas être contesté." });
-      }
       if (!(await isPilotInScope(await getScope(req), score.pilot))) {
         return res.status(403).json({ message: "Évaluation hors de votre périmètre." });
       }

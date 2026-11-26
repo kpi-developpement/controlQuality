@@ -6,6 +6,7 @@ import { exportToXlsx } from "../admin/components/exportXlsx.js";
 import { DIRECTIONS, directionLabel, scorePercent, fmtDate, evalExportRow, evalCriteriaRows, getCurrentUser, navigate } from "../../utils/evalMeta.js";
 import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
+import api from "../../api";
 
 const GAP_OK = 10; // écart max (points) pour considérer un appel « aligné »
 const GAP_WARN = 20;
@@ -13,12 +14,18 @@ const curYM = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 
 /**
  * Onglet Calibrages (contrat Orange, §3.1) : appels entrants / sortants évalués par plusieurs
- * évaluateurs pour mesurer leur alignement. Les calibrages sont exclus des indicateurs agents.
+ * évaluateurs pour mesurer leur alignement. Exclus du score qualité ; l'agent peut les valider et le
+ * Management les contester (taux de validation / contestation des calibrages).
  */
 export default function CalibrationsPage() {
   const user = getCurrentUser();
   const role = user?.role || "";
-  const canCreate = ["cq", "formateur", "management"].includes(role);
+  const canCreate = ["cq", "formateur", "management", "superviseur", "referent", "cdp"].includes(role);
+  // Contestation d'un calibrage réalisé par un CQ / formateur (mêmes règles que les évaluations)
+  const canContestRole = ["management", "superviseur", "referent", "cdp"].includes(role);
+  const myId = String(user?._id || user?.id || "");
+  const [tick, setTick] = useState(0);
+  const [contesting, setContesting] = useState("");
   const endpoint = ["cq", "formateur"].includes(role) ? "/scores/mine" : "/scores";
   const [ym, setYm] = useState(curYM());
   const [direction, setDirection] = useState("");
@@ -37,7 +44,23 @@ export default function CalibrationsPage() {
       .catch((e) => !ctrl.signal.aborted && setErr(e?.response?.data?.message || e.message || "Chargement impossible."))
       .finally(() => !ctrl.signal.aborted && setLoading(false));
     return () => ctrl.abort();
-  }, [endpoint, ym, direction]);
+  }, [endpoint, ym, direction, tick]);
+
+  // Garde le détail ouvert à jour après une contestation
+  useEffect(() => {
+    setDetail((d) => (d ? { ...d, evals: d.evals.map((e) => items.find((x) => String(x._id) === String(e._id)) || e) } : d));
+  }, [items]);
+
+  async function contestCalibration(e) {
+    const comment = window.prompt("Motif de la contestation (facultatif) :", "");
+    if (comment === null) return;
+    try {
+      setContesting(String(e._id));
+      await api.post(`/scores/${e._id}/contest`, { contestComment: comment.trim() }, { toastSuccessMessage: "Calibrage contesté : le CQ est notifié." });
+      setTick((x) => x + 1);
+    } catch { /* toast d'erreur automatique */ } finally { setContesting(""); }
+  }
+  const canContest = (e) => canContestRole && !e.contested && ["cq", "formateur"].includes(e.evaluatorRole || e.evaluator?.role) && String(e.evaluator?._id || e.evaluator) !== myId;
 
   const groups = useMemo(() => {
     const map = new Map();
@@ -170,6 +193,12 @@ export default function CalibrationsPage() {
                 <tbody>
                   <tr><td style={{ fontWeight: 700 }}>Score</td>{detail.evals.map((e) => <td key={e._id} style={{ fontWeight: 700 }}>{Number(scorePercent(e)).toFixed(1)} %</td>)}</tr>
                   <tr><td>Code de clôture</td>{detail.evals.map((e) => <td key={e._id}>{e.closureCode || "—"}</td>)}</tr>
+                  <tr><td>Validé par l'agent</td>{detail.evals.map((e) => <td key={e._id}>{e.pilotValidated ? <span className="badge badge--success">Validé</span> : <span className="badge badge--muted">En attente</span>}</td>)}</tr>
+                  <tr><td>Contestation</td>{detail.evals.map((e) => <td key={e._id}>
+                    {e.contested ? <span className="badge badge--warning">Contesté</span>
+                      : canContest(e) ? <button className="btn btn--ghost btn--sm" type="button" disabled={contesting === String(e._id)} onClick={() => contestCalibration(e)}>Contester</button>
+                      : <span style={{ color: "var(--muted)" }}>—</span>}
+                  </td>)}</tr>
                   {(matrix || []).map((r) => (
                     <tr key={r.label} style={r.divergent ? { background: "var(--warning-bg)" } : undefined}>
                       <td>{r.label}{r.divergent ? <Ico n="alert" /> : ""}</td>

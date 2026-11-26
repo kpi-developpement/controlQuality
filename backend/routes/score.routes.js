@@ -487,16 +487,16 @@ if (gridTypeForSave === "presence") {
           if (evId) io.to(`user:${evId}`).emit("scores:changed", { action: "created", id: String(score._id) });
         }
 
-        // Notify pilot of new evaluation (pas pour un calibrage : exercice interne)
+        // Notify pilot of new evaluation (calibrage compris : l'agent peut le valider)
         try {
-          if (evalType === "calibration") throw new Error("skip");
           const Notification = require("../models/Notification");
           const pilotUserId = populated?.pilot?._id || pilotId;
           const evaluatorName = req.user.name || "Évaluateur";
+          const isCal = evalType === "calibration";
           const notif = await Notification.create({
             type: "notification",
-            title: "Nouvelle évaluation",
-            message: `📋 ${evaluatorName} a réalisé une évaluation sur l'appel ${populated?.eps || ""}. Score : ${Math.round(populated?.compliancePercent || populated?.total || 0)}%.`,
+            title: isCal ? "Nouveau calibrage" : "Nouvelle évaluation",
+            message: `📋 ${evaluatorName} a réalisé ${isCal ? "un calibrage" : "une évaluation"} sur l'appel ${populated?.eps || ""}. Score : ${Math.round(populated?.compliancePercent || populated?.total || 0)}%.`,
             targetUsers: [pilotUserId],
             createdBy: req.user.id || req.user._id,
             meta: { scoreId: String(score._id) },
@@ -927,8 +927,10 @@ router.get(
     try {
       const pilotId = req.user.id || req.user._id;
 
-      // Le calibrage (exercice interne entre évaluateurs) n'est pas présenté à l'agent.
-      const scores = await Score.find({ pilot: pilotId, evaluationType: { $ne: "calibration" } })
+      // Calibrages : présentés à l'agent uniquement sur demande (onglet « Mes évaluations »), pour qu'il
+      // puisse les valider (taux de validation des calibrages). Ils restent hors moyenne et hors compteur.
+      const withCalibrations = ["1", "true", "yes"].includes(String(req.query.includeCalibrations || "").toLowerCase());
+      const scores = await Score.find(withCalibrations ? { pilot: pilotId } : { pilot: pilotId, evaluationType: { $ne: "calibration" } })
         .populate("evaluator", "-passwordHash")
         .sort({ createdAt: -1 })
         .lean();
@@ -997,10 +999,11 @@ router.get(
         };
       });
 
-      const count = mapped.length;
+      const production = mapped.filter((s) => s.evaluationType !== "calibration");
+      const count = production.length;
       const average =
         count > 0
-          ? mapped.reduce(
+          ? production.reduce(
               (acc, s) => acc + Number(s.total || 0),
               0
             ) / count
@@ -1154,7 +1157,7 @@ router.get(
  */
 router.get(
   "/contested",
-  permit("cq", "admin", "formateur", "cdp", "superviseur", "referent"),
+  permit("cq", "admin", "formateur", "management"),
   async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page || "1", 10));
@@ -1951,9 +1954,6 @@ router.post(
           message: "Seules les évaluations réalisées par un CQ peuvent être contestées.",
         });
       }
-      if (score.evaluationType === "calibration") {
-        return res.status(400).json({ message: "Un calibrage ne peut pas être contesté." });
-      }
       if (role !== "pilote" && !(await isPilotInScope(await getScope(req), score.pilot))) {
         return res.status(403).json({ message: "Évaluation hors de votre périmètre." });
       }
@@ -2035,9 +2035,6 @@ router.post(
       const me = String(req.user.id || req.user._id);
       if (String(score.pilot) !== me) {
         return res.status(403).json({ message: "Vous ne pouvez valider que vos propres évaluations." });
-      }
-      if (score.evaluationType === "calibration") {
-        return res.status(400).json({ message: "Un calibrage ne se valide pas." });
       }
       if (score.contested) {
         return res.status(409).json({ message: "Évaluation en cours de contestation : validation impossible." });

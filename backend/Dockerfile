@@ -4,7 +4,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # LibreOffice : conversion des supports PowerPoint en PDF (affichage dans l'onglet Formations & Quiz)
-RUN apk add --no-cache libreoffice ttf-dejavu font-noto
+# (polices : « font-dejavu » depuis Alpine 3.17, « ttf-dejavu » avant ; une police absente ne bloque pas le build)
+RUN apk add --no-cache libreoffice \
+    && (apk add --no-cache font-dejavu font-noto || apk add --no-cache ttf-dejavu || echo "Polices supplémentaires indisponibles") \
+    && (command -v soffice || command -v libreoffice || ls /usr/lib/libreoffice/program/soffice)
 
 COPY package*.json ./
 

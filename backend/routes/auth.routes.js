@@ -54,6 +54,20 @@ router.post("/login", async (req, res) => {
       { expiresIn: "8h" }
     );
 
+    // Mot de passe consultable par l'admin : les comptes créés avant la mise en place du coffre
+    // n'ont pas de copie chiffrée ; on l'enregistre à la première connexion réussie
+    // (ou si la clé a changé). N'empêche jamais la connexion.
+    try {
+      const vault = require("../utils/passwordVault");
+      const current = await User.findById(user._id).select("+passwordEnc").lean();
+      if (vault.openPassword(current?.passwordEnc) !== password) {
+        const sealed = vault.sealPassword(password);
+        if (sealed) await User.updateOne({ _id: user._id }, { $set: { passwordEnc: sealed } });
+      }
+    } catch (e) {
+      console.error("Password vault error:", e?.message || e);
+    }
+
     // Contrat Orange : journal des connexions (taux d'utilisation). N'empêche jamais la connexion.
     try {
       await LoginEvent.create({

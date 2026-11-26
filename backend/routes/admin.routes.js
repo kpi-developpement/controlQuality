@@ -1688,7 +1688,7 @@ router.get("/users/:id/password", permit("admin"), async (req, res) => {
     const password = openPassword(user.passwordEnc);
     await logAudit(req, { action: "VIEW_PASSWORD", targetType: "user", targetId: user._id, metadata: { email: user.email, available: !!password } });
     if (!password) {
-      return res.json({ available: false, message: "Mot de passe non consultable : il a été défini avant l'activation de cette fonction. Générez-en un nouveau pour pouvoir le consulter ensuite." });
+      return res.json({ available: false, message: "Mot de passe pas encore consultable : il a été défini avant l'activation de cette fonction. Il s'affichera dès la prochaine connexion de l'utilisateur, ou générez-en un nouveau dès maintenant." });
     }
     res.json({ available: true, password });
   } catch (err) {

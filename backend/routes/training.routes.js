@@ -32,6 +32,26 @@ function uploadedPath(v) {
 // Marge réseau tolérée après la fin du délai de passation
 const QUIZ_GRACE_MS = 60 * 1000;
 
+/**
+ * Démarrage d'un quiz : nouveau passage, reprise du passage en cours (le chronomètre ne repart pas
+ * de zéro), refus (tentative unique déjà utilisée) ou délai expiré sur une tentative unique.
+ */
+function quizStartInfo(t, userId, now = Date.now()) {
+  const uid = String(userId);
+  const limit = Number(t.timeLimitMinutes) || 0;
+  const mine = (t.attempts || []).filter((a) => String(a.user) === uid);
+  if (t.allowMultipleAttempts === false && mine.length) return { action: "blocked", limit };
+  const lastAttempt = mine.reduce((m, a) => Math.max(m, new Date(a.completedAt || 0).getTime()), 0);
+  const st = (t.starts || []).find((x) => String(x.user) === uid);
+  const startedMs = st ? new Date(st.startedAt).getTime() : 0;
+  if (limit > 0 && st && startedMs > lastAttempt) {
+    const deadlineMs = startedMs + limit * 60000;
+    if (now <= deadlineMs) return { action: "resume", limit, startedAt: new Date(startedMs), deadline: new Date(deadlineMs) };
+    if (now > deadlineMs + QUIZ_GRACE_MS && t.allowMultipleAttempts === false) return { action: "expired", limit };
+  }
+  return { action: "new", limit };
+}
+
 // === Multer config ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -65,7 +85,7 @@ const upload = multer({
 function convertToPdf(filePath) {
   const { execFile } = require("child_process");
   const dir = path.dirname(filePath);
-  const bins = [process.env.SOFFICE_BIN, "soffice", "libreoffice"].filter(Boolean);
+  const bins = [process.env.SOFFICE_BIN, "soffice", "libreoffice", "/usr/lib/libreoffice/program/soffice"].filter(Boolean);
   return new Promise((resolve) => {
     const tryBin = (i) => {
       if (i >= bins.length) return resolve("");
@@ -341,16 +361,29 @@ router.post("/:id/start", async (req, res) => {
     const mongoose = require("mongoose");
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: "ID invalide." });
     const userId = req.user.id || req.user._id;
-    const t = await Training.findById(req.params.id).select("allowMultipleAttempts attempts.user timeLimitMinutes").lean();
+    const t = await Training.findById(req.params.id).select("allowMultipleAttempts attempts.user attempts.completedAt starts timeLimitMinutes questions._id").lean();
     if (!t) return res.status(404).json({ message: "Formation introuvable." });
-    if (t.allowMultipleAttempts === false && (t.attempts || []).some((a) => String(a.user) === String(userId))) {
+    const info = quizStartInfo(t, userId);
+    if (info.action === "blocked") {
       return res.status(403).json({ message: "Une seule tentative autorisée pour ce quiz. Vous l'avez déjà passé.", canAttempt: false });
     }
-    // Chaque passage redémarre le chronomètre (délai de passation)
+    if (info.action === "expired") {
+      // Tentative unique commencée puis abandonnée au-delà du délai : enregistrée comme non réussie
+      const total = (t.questions || []).length;
+      await Training.updateOne(
+        { _id: t._id, "attempts.user": { $ne: userId } },
+        { $push: { attempts: { user: userId, answers: [], score: 0, total, completedAt: new Date(), timedOut: true } } }
+      );
+      return res.status(403).json({ message: `Délai de passation dépassé (${info.limit} min). Une seule tentative était autorisée.`, code: "QUIZ_TIMEOUT", canAttempt: false });
+    }
+    if (info.action === "resume") {
+      // Un passage déjà en cours : le chronomètre continue (il ne repart pas de zéro)
+      return res.json({ ok: true, resumed: true, startedAt: info.startedAt, timeLimitMinutes: info.limit, deadline: info.deadline });
+    }
     const startedAt = new Date();
     await Training.updateOne({ _id: req.params.id }, { $pull: { starts: { user: userId } } });
     await Training.updateOne({ _id: req.params.id }, { $push: { starts: { user: userId, startedAt } } });
-    const limit = Number(t.timeLimitMinutes) || 0;
+    const limit = info.limit;
     res.json({ ok: true, startedAt, timeLimitMinutes: limit, deadline: limit ? new Date(startedAt.getTime() + limit * 60000) : null });
   } catch (err) {
     console.error("POST /training/:id/start error:", err);
@@ -383,6 +416,12 @@ router.post("/:id/attempt", async (req, res) => {
       if (!st) return res.status(400).json({ message: "Démarrez le quiz avant d'envoyer vos réponses." });
       const elapsed = Date.now() - new Date(st.startedAt).getTime();
       if (elapsed > limitMin * 60000 + QUIZ_GRACE_MS) {
+        if (t.allowMultipleAttempts === false) {
+          await Training.updateOne(
+            { _id: t._id, "attempts.user": { $ne: req.user.id || req.user._id } },
+            { $push: { attempts: { user: req.user.id || req.user._id, answers: [], score: 0, total: (t.questions || []).length, completedAt: new Date(), timedOut: true } } }
+          );
+        }
         return res.status(403).json({ message: `Délai de passation dépassé (${limitMin} min). Réponses non enregistrées.`, code: "QUIZ_TIMEOUT" });
       }
       timedOut = elapsed > limitMin * 60000;
@@ -435,3 +474,4 @@ router.get("/:id/results", permit("admin", "formateur"), async (req, res) => {
 });
 
 module.exports = router;
+module.exports._test = { quizStartInfo };

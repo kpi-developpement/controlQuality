@@ -25,7 +25,7 @@ export default function PilotEvaluations() {
 
   async function load() {
     try {
-      const d = (await api.get("/scores/me")).data || {};
+      const d = (await api.get("/scores/me", { params: { includeCalibrations: 1 } })).data || {};
       setScores(d.scores || []);
       setValidationEnabled(!!d.validationEnabled);
     } catch {} finally { setLoading(false); }
@@ -99,7 +99,7 @@ export default function PilotEvaluations() {
                           <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>Non</span>
                         )}
                       </td>
-                      <td style={{ fontFamily: "monospace", fontSize: "0.82rem" }}>{s.eps || "—"}</td>
+                      <td style={{ fontFamily: "monospace", fontSize: "0.82rem" }}>{s.eps || "—"}{["calibration", "picking"].includes(s.evaluationType) && <> <span className="badge badge--primary" style={{ fontFamily: "inherit", fontSize: "0.7rem" }}>{s.evaluationType === "calibration" ? "Calibrage" : "Picking"}</span></>}</td>
                       <td style={{ fontSize: "0.85rem" }}>{s.callDuration || "—"}</td>
                       <td><span className={`badge ${sc(v)}`}>{v.toFixed(1)}%</span></td>
                       <td>{s.contested ? <span className="badge badge--warning">Contestée</span> : s.pilotValidated ? <span className="badge badge--success">Validée</span> : validationEnabled ? <span className="badge badge--muted">À valider</span> : <span style={{ color: "var(--success)", fontWeight: 600, fontSize: "0.82rem" }}><Ico n="check" /></span>}</td>

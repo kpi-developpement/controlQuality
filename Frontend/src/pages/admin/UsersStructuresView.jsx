@@ -267,7 +267,7 @@ export default function UsersStructuresView() {
     if (value.length < 6) { toast.error("Le mot de passe doit contenir au moins 6 caractères."); return; }
     try {
       await axios.patch(`/admin/users/${pwd.id}`, { password: value }, { toastSuccessMessage: "Mot de passe modifié. Pensez à le transmettre à l'utilisateur." });
-      setPwd((p) => ({ ...p, saved: value, show: true }));
+      setPwd((p) => ({ ...p, saved: value, show: true, current: p.current ? { available: true, password: value } : p.current }));
       await load();
     } catch { /* toast d'erreur automatique */ }
   };

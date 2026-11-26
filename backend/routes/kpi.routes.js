@@ -191,7 +191,6 @@ router.get("/summary", permit(...INDICATOR_READERS), async (req, res) => {
     const calCont = K.evaluationContestation(calibrations);
     const coachVal = K.coachingValidation(coachings);
     const quizC = K.quizCompletion(trainings, quizUsers);
-    const coachedAgents = new Set(coachings.map((c) => String(c.pilot)).filter((id) => agentIds.has(id))).size;
     const ind = (key, label, formula, num, den) => ({ key, label, formula, num, den, rate: K.rate(num, den) });
     const clientIndicators = [
       ind("coachingValidation", "Taux de validation des coachings", "Coachings validés / coachings reçus", coachVal.validated, coachVal.received),
@@ -201,7 +200,7 @@ router.get("/summary", permit(...INDICATOR_READERS), async (req, res) => {
       ind("calibrationContestation", "Taux de contestation des calibrages", "Calibrages contestés / calibrages reçus", calCont.contested, calCont.received),
       ind("quizCompletion", "Taux de passation des quiz", "Quiz finalisés / quiz actifs attribués", quizC.finalized, quizC.assignments),
       ind("coverage", "Taux de couverture des évaluations", "Agents actifs évalués / total des agents actifs", evaluatedAgents, pop.agents.length),
-      ind("coachingRate", "Taux de coaching", "Agents actifs coachés / total des agents actifs", coachedAgents, pop.agents.length),
+      ind("coachingRate", "Taux de coaching", "Nombre de coachings / nombre de pilotes actifs", coachings.length, pop.agents.length),
       ind("connection", "Taux de connexion à l'application", "Utilisateurs connectés / total des utilisateurs", distinctLogged.length, usageIds.length),
     ];
 
@@ -260,7 +259,8 @@ router.get("/summary", permit(...INDICATOR_READERS), async (req, res) => {
  */
 const ALL_ROLES = ["admin", "cdp", "superviseur", "referent", "management", "cq", "formateur", "supervision", "pilote"];
 const STAFF_ROLES = ALL_ROLES.filter((r) => r !== "pilote");
-const LEAD_ROLES = ["admin", "cdp", "superviseur", "supervision"];
+// Contestations, quiz, couverture et taux de coaching : Admin, Chef de projet, Superviseur, Management
+const LEAD_ROLES = ["admin", "cdp", "superviseur", "supervision", "management"];
 const DASHBOARD_INDICATORS = [
   { key: "qualityScore", label: "Score qualité (note QA)", roles: ALL_ROLES, kind: "percent", formula: "Moyenne des scores des évaluations" },
   { key: "evaluations", label: "Nombre d'évaluations", roles: STAFF_ROLES, kind: "count", formula: "Évaluations réalisées sur la période (hors calibrages et pickings)" },
