@@ -1,0 +1,54 @@
+/* =====================================================================
+   Couches superposées : fenêtres modales, confirmation, palette de commandes
+   Verre épais (flou) : réservé à ces éléments peu nombreux.
+   ===================================================================== */
+.modal-overlay{
+  position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;
+  background:var(--overlay);
+  -webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);
+  animation:fadeIn 220ms var(--ease-std)
+}
+.modal{
+  position:relative;width:100%;max-width:600px;max-height:90vh;overflow:auto;
+  padding:1.7rem;border-radius:var(--radius-xl);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 96%,var(--primary) 4%),var(--panel));
+  border:1px solid var(--border-strong);
+  box-shadow:var(--card-highlight),var(--shadow-lg),0 0 0 1px rgba(255,255,255,0.02);
+  animation:modalIn 460ms var(--spring) both
+}
+/* liseré lumineux en haut de la fenêtre */
+.modal::before{
+  content:"";position:absolute;top:0;left:28px;right:28px;height:1px;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--primary) 90%,#fff),var(--accent),transparent)
+}
+html.perf-lite .modal-overlay{-webkit-backdrop-filter:none;backdrop-filter:none}
+
+.confirm{max-width:440px;text-align:center}
+.confirm__icon{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;margin:0 auto 12px;background:var(--warning-bg);color:var(--warning);animation:popIn 520ms var(--spring-bouncy) both}
+.confirm__icon--danger{background:var(--danger-bg);color:var(--danger)}
+.confirm__title{margin:0 0 8px;font-size:1.12rem}
+.confirm__msg{color:var(--text-secondary);font-size:0.92rem;line-height:1.55}
+.confirm__actions{display:flex;justify-content:center;gap:10px;margin-top:20px}
+
+/* Palette de commandes (recherche ⌘K) */
+.cmd-menu{
+  position:absolute;top:calc(100% + 10px);left:0;right:0;z-index:100;
+  padding:6px;max-height:380px;overflow-y:auto;
+  background:color-mix(in srgb,var(--panel) 90%,transparent);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  border:1px solid var(--glass-border);border-radius:16px;
+  box-shadow:var(--card-highlight),var(--shadow-lg);
+  transform-origin:top center;animation:kselectIn 260ms var(--spring)
+}
+.cmd-menu__item{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:11px;cursor:pointer;
+  font-size:0.875rem;font-weight:600;color:var(--text);
+  transition:background-color var(--dur-fast),color var(--dur-fast),padding-left var(--dur) var(--spring)
+}
+.cmd-menu__item:hover,.cmd-menu__item--active{background:var(--primary-bg);color:var(--primary);padding-left:14px}
+.cmd-menu__icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--chip);font-size:0.95rem;flex-shrink:0}
+.cmd-menu__item--active .cmd-menu__icon{background:color-mix(in srgb,var(--primary) 18%,transparent)}
+.cmd-menu__section{margin-left:auto;font-size:0.68rem;color:var(--muted);font-weight:600;letter-spacing:0.04em;text-transform:uppercase}
+.cmd-menu__hint{font-size:0.7rem;color:var(--muted);opacity:0;transition:opacity var(--dur-fast)}
+.cmd-menu__item--active .cmd-menu__hint{opacity:1}
+.cmd-menu__empty{padding:16px 14px;color:var(--muted);font-size:0.85rem;text-align:center}

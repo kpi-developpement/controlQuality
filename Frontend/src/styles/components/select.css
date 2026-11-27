@@ -1,0 +1,48 @@
+/* =====================================================================
+   Liste déroulante stylée (src/ui/Select.jsx) : déclencheur + menu en verre
+   ===================================================================== */
+.kselect{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;cursor:pointer;min-width:0;max-width:100%;line-height:1.35;font-weight:500}
+.kselect--bare{
+  border:1px solid var(--border-strong);background:var(--panel);color:var(--text);border-radius:10px;
+  padding:0.5rem 0.7rem;font-size:0.85rem;box-shadow:var(--shadow-xs);min-height:36px;
+  transition:border-color var(--dur) var(--ease-std),box-shadow var(--dur) var(--ease-std);
+}
+.kselect--bare:hover{border-color:rgba(59,111,245,0.4)}
+.kselect.input{display:flex}
+.kselect__value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kselect.is-placeholder .kselect__value{color:var(--muted)}
+.kselect__chev{flex-shrink:0;color:var(--muted);transition:transform var(--dur) var(--ease-out),color var(--dur)}
+.kselect:hover .kselect__chev{color:var(--primary)}
+.kselect.is-open{border-color:var(--primary);box-shadow:var(--ring)}
+.kselect.is-open .kselect__chev{transform:rotate(180deg);color:var(--primary)}
+.kselect:disabled{opacity:0.55;cursor:not-allowed;background:var(--panel-2)}
+.kselect:focus-visible{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
+.kselect__menu{
+  position:fixed;z-index:2000;display:flex;flex-direction:column;overflow:hidden;
+  background:color-mix(in srgb,var(--panel) 94%,transparent);
+  backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);
+  border:1px solid var(--border-strong);border-radius:14px;
+  box-shadow:var(--shadow-lg),0 0 0 1px rgba(255,255,255,0.04) inset;
+  transform-origin:top center;animation:kselectIn 220ms var(--ease-out);
+  font-size:0.86rem;color:var(--text);
+}
+.kselect__menu.is-up{transform-origin:bottom center;animation-name:kselectInUp}
+.kselect__search{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);color:var(--muted)}
+.kselect__search input{flex:1;border:none;outline:none;background:transparent;color:var(--text);font-size:0.85rem;min-width:0}
+.kselect__list{overflow-y:auto;padding:5px;flex:1}
+.kselect__group{padding:8px 10px 4px;font-size:0.66rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted)}
+.kselect__opt{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;color:var(--text);font-weight:500;transition:background-color 100ms,color 100ms}
+.kselect__opt.is-active{background:var(--chip)}
+.kselect__opt.is-selected{color:var(--primary);font-weight:650;background:var(--primary-bg)}
+.kselect__opt.is-selected.is-active{background:color-mix(in srgb,var(--primary) 14%,transparent)}
+.kselect__opt.is-disabled{opacity:0.45;cursor:not-allowed}
+.kselect__opt.is-empty .kselect__label{color:var(--muted)}
+.kselect__label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kselect__tick{flex-shrink:0;color:var(--primary);animation:tickIn 260ms var(--ease-spring)}
+.kselect__box{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--border-strong);display:grid;place-items:center;flex-shrink:0;font-size:11px;color:#fff;transition:all 150ms}
+.kselect__box.is-on{background:var(--grad-primary);border-color:var(--primary)}
+.kselect__empty{padding:14px;text-align:center;color:var(--muted);font-size:0.82rem}
+.kselect__opt{transition:background-color 120ms,color 120ms,padding-left 160ms}
+.kselect__opt.is-active:not(.is-disabled){padding-left:14px}
+.kselect__more{display:inline-flex;align-items:center;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:0.72rem;font-weight:700;color:var(--primary);background:var(--primary-bg);border:1px solid var(--primary-border)}
+.kselect__tag{flex-shrink:0;padding:1px 7px;border-radius:999px;font-size:0.66rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--primary);background:var(--primary-bg)}

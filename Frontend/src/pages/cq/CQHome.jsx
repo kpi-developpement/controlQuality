@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { CHART } from "../../ui/chartColors.js";
 import api from "../../api";
 import PageHeader from "../../components/PageHeader.jsx";
 import { StatCards } from "../../components/StatCards.jsx";
@@ -156,7 +157,7 @@ export default function CQHome() {
                   <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v) => `${v}%`} contentStyle={{ borderRadius: 10, border: "1px solid var(--border)" }} />
-                  <Line type="monotone" dataKey="avg" stroke="#2456e6" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="avg" stroke={CHART.primary} strokeWidth={2.5} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (

@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { CHART } from "../../ui/chartColors.js";
 import api from "../../api";
 import PageHeader from "../../components/PageHeader.jsx";
 import PerimeterFilters, { perimeterParams } from "../../components/PerimeterFilters.jsx";
-import KpiCard, { fmtRate, toneFor, currentMonth } from "../../components/KpiCard.jsx";
+import KpiCard from "../../components/KpiCard.jsx";
+import { fmtRate, toneFor, currentMonth } from "../../utils/kpiFormat.js";
 import { exportToXlsx } from "../admin/components/exportXlsx.js";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import Select from "../../ui/Select.jsx";
@@ -115,9 +117,9 @@ export default function CQProgressView() {
                   <YAxis yAxisId="p" orientation="right" domain={[0, (max) => Math.max(100, Math.ceil(max / 10) * 10)]} tick={{ fontSize: 11 }} unit="%" />
                   <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid var(--border)" }} />
                   <Legend />
-                  <Bar yAxisId="n" dataKey="done" name="Réalisées" fill="#2456e6" radius={[4, 4, 0, 0]} />
-                  <Bar yAxisId="n" dataKey="expected" name="Attendues" fill="#c7d2fe" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="p" type="monotone" dataKey="coveragePct" name="Couverture (%)" stroke="#059669" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Bar yAxisId="n" dataKey="done" name="Réalisées" fill={CHART.primary} radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="n" dataKey="expected" name="Attendues" fill={CHART.muted} radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="p" type="monotone" dataKey="coveragePct" name="Couverture (%)" stroke={CHART.success} strokeWidth={2.5} dot={{ r: 3 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

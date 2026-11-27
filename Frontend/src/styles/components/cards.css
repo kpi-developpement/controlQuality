@@ -1,0 +1,145 @@
+/* =====================================================================
+   Cartes « Liquid Glass » + Spotlight
+   - fond translucide dégradé, bordure 1px très fine, reflet intérieur en haut
+   - au survol : une lueur suit le curseur sur la bordure (--x / --y posés par src/ui/spotlight.js)
+     et un halo doux éclaire l'intérieur
+   - .card--tilt : inclinaison 3D + parallaxe des éléments internes (src/ui/tilt.js)
+   - .bento : grille asymétrique (tuiles de tailles différentes)
+   Pas de backdrop-filter ici (trop coûteux répété sur des dizaines de cartes).
+   ===================================================================== */
+.card{
+  position:relative;isolation:isolate;min-width:0;
+  padding:var(--card-pad);
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--card-highlight),var(--card-shadow);
+  transition:
+    box-shadow var(--dur-slow) var(--ease-std),
+    border-color var(--dur-slow) var(--ease-std),
+    transform var(--dur-spring) var(--spring);
+}
+/* Bordure lumineuse qui suit le curseur (masquée hors du liseré de 1px) */
+.card::before{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;z-index:1;
+  background:radial-gradient(320px circle at var(--x,50%) var(--y,-40%),var(--spotlight),transparent 45%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  opacity:0;transition:opacity 420ms var(--ease-std);
+}
+/* Halo intérieur */
+.card::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  background:radial-gradient(520px circle at var(--x,50%) var(--y,-40%),var(--spotlight-fill),transparent 42%);
+  opacity:0;transition:opacity 420ms var(--ease-std);
+}
+.card:hover::before,.card:hover::after{opacity:1}
+.card:hover{border-color:color-mix(in srgb,var(--primary) 22%,var(--card-border));box-shadow:var(--card-highlight),var(--card-shadow-hover)}
+
+/* Cartes imbriquées : sobres, sans effet */
+.card .card{background:var(--card-bg-nested);box-shadow:none}
+.card .card::before,.card .card::after{display:none}
+
+.card--interactive,.is-clickable{cursor:pointer}
+.card--interactive:hover{transform:translateY(-3px)}
+
+/* Mise en page interne fréquente */
+.card > div:first-child[style*="justify-content: space-between"]{align-items:center}
+.card:has(> table),.card:has(> .data-table){overflow-x:auto}
+.card form[style*="display: grid"],.card [style*="grid-template-columns"]:has(> .input){gap:12px !important}
+.card [style*="grid-template-columns"] > .input,.card [style*="grid-template-columns"] > .kselect{width:100%}
+.card [style*="display: flex"]:has(> .badge){flex-wrap:wrap;row-gap:6px}
+/* Titres de carte : typographie d'affichage resserrée */
+.card > [style*="font-weight: 700"]:first-child,
+.card > [style*="font-weight: 800"]:first-child,
+.card > div:first-child > [style*="font-weight: 700"]:first-child,
+.card > div:first-child > [style*="font-weight: 800"]:first-child{font-family:var(--font-display);letter-spacing:-0.02em}
+.card [style*="font-weight: 700"]:not([style*="color"]) > .ico:first-child,
+.card [style*="font-weight: 800"]:not([style*="color"]) > .ico:first-child{color:var(--primary)}
+
+/* ---------------------------------------------------------------------
+   Inclinaison 3D & parallaxe (cartes KPI) — --rx / --ry posés par src/ui/tilt.js
+   --------------------------------------------------------------------- */
+.card--tilt{transform-style:preserve-3d;will-change:transform}
+.card--tilt.is-tilting{
+  transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-3px);
+  transition:transform 120ms linear,box-shadow var(--dur-slow),border-color var(--dur-slow);
+}
+.card--tilt [data-depth]{transition:transform var(--dur-spring) var(--spring)}
+.card--tilt.is-tilting [data-depth]{transform:translate3d(calc(var(--px,0) * var(--depth,6) * 1px),calc(var(--py,0) * var(--depth,6) * 1px),0)}
+.card--tilt [data-depth="1"]{--depth:4}
+.card--tilt [data-depth="2"]{--depth:9}
+.card--tilt [data-depth="3"]{--depth:14}
+
+/* ---------------------------------------------------------------------
+   Cartes statistiques / KPI
+   --------------------------------------------------------------------- */
+.stat-card{
+  --stat-accent:var(--primary);
+  overflow:hidden;padding:20px 22px !important;min-height:120px;
+  display:flex;flex-direction:column;gap:6px;
+}
+/* lueur colorée dans le coin, teintée selon l'état de l'indicateur */
+.stat-card > .stat-card__glow,
+.stat-card{background:
+  radial-gradient(220px circle at 100% 0%,color-mix(in srgb,var(--stat-accent) 16%,transparent),transparent 70%),
+  var(--card-bg)}
+.stat-card__label{
+  display:flex;align-items:center;gap:8px;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--muted);padding-right:30px;line-height:1.35;min-height:2.7em
+}
+.stat-card__label::before{
+  content:"";width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--stat-accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--stat-accent) 20%,transparent),0 0 12px var(--stat-accent)
+}
+.stat-card__value{
+  font-family:var(--font-display);font-size:2.1rem;font-weight:700;letter-spacing:-0.045em;line-height:1.1;
+  font-variant-numeric:tabular-nums;margin-top:4px;animation:valueIn 900ms var(--spring) backwards
+}
+.stat-card__detail{font-size:0.84rem;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.stat-card__formula{margin-top:auto;padding-top:10px;font-size:0.72rem;color:var(--muted);border-top:1px dashed var(--border)}
+.stat-card__icon{
+  position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:15px;
+  color:var(--stat-accent);background:color-mix(in srgb,var(--stat-accent) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--stat-accent) 24%,transparent);
+  transition:transform var(--dur-spring) var(--spring-bouncy),box-shadow var(--dur)
+}
+.stat-card:hover .stat-card__icon{transform:rotate(-8deg) scale(1.1);box-shadow:0 8px 20px -8px var(--stat-accent)}
+/* mini-jauge sous la valeur */
+.stat-card__meter{height:5px;border-radius:99px;background:var(--chip);overflow:hidden;margin-top:6px}
+.stat-card__meter > span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--stat-accent) 60%,transparent),var(--stat-accent));transform-origin:left;animation:meterIn 1100ms var(--spring) both}
+@keyframes meterIn{from{transform:scaleX(0)}}
+
+/* ---------------------------------------------------------------------
+   Grille Bento : tuiles asymétriques
+   --------------------------------------------------------------------- */
+.bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-flow:dense;gap:16px}
+.bento > *{grid-column:span 3}
+.bento > .bento--hero{grid-column:span 6;grid-row:span 2}
+.bento > .bento--wide{grid-column:span 6}
+.bento > .bento--tall{grid-row:span 2}
+.bento--hero .stat-card__value{font-size:3.6rem}
+.bento--hero{justify-content:flex-start}
+/* anneau de la tuile principale */
+.stat-card__ring{position:absolute;right:26px;bottom:44px;width:min(46%,210px);height:auto}
+.stat-card__ring circle{fill:none;stroke-width:12}
+.stat-card__ring-track{stroke:var(--chip)}
+.stat-card__ring-value{stroke:var(--stat-accent);stroke-linecap:round;stroke-dashoffset:var(--off);filter:drop-shadow(0 0 10px color-mix(in srgb,var(--stat-accent) 60%,transparent));animation:ringIn 1400ms var(--spring) both}
+.stat-card__ring-text{fill:var(--text);font-family:var(--font-display);font-weight:700;font-size:40px;letter-spacing:-0.04em}
+@keyframes ringIn{from{stroke-dashoffset:var(--len)}}
+@media (max-width:900px){.stat-card__ring{display:none}}
+@media (max-width:1280px){
+  .bento > *{grid-column:span 4}
+  .bento > .bento--hero,.bento > .bento--wide{grid-column:span 8}
+}
+@media (max-width:900px){
+  .bento > *,.bento > .bento--wide{grid-column:span 6}
+  .bento > .bento--hero{grid-column:span 12;grid-row:auto}
+}
+@media (max-width:560px){
+  .bento > *{grid-column:span 12 !important}
+}
+
+/* Mode performance : effets coupés */
+html.perf-lite .card::before,html.perf-lite .card::after{display:none}
+html.perf-lite .card--tilt.is-tilting{transform:none}

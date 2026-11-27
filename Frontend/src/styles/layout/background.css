@@ -1,0 +1,58 @@
+/* =====================================================================
+   Fond atmosphérique (src/components/fx/AuroraBackground.jsx)
+   1. Aurores : taches de couleur floues qui dérivent lentement (transform seulement → GPU)
+   2. Trame de points masquée : visible au centre et autour du curseur, fondue vers les bords
+   3. Grain : texture argentique à ~4 % (évite les bandes de dégradé, rendu « matière »)
+   ===================================================================== */
+.aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;background:var(--bg)}
+
+/* voile de base : léger dégradé vertical bleu nuit */
+.aurora::before{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(120% 70% at 50% -10%,color-mix(in srgb,var(--aurora-1) 60%,transparent),transparent 60%),
+    linear-gradient(180deg,transparent 40%,color-mix(in srgb,var(--bg) 70%,#000 0%) 100%);
+}
+
+.aurora__blob{
+  position:absolute;border-radius:50%;filter:blur(80px);opacity:1;will-change:transform;
+  animation:auraDrift 32s ease-in-out infinite
+}
+.aurora__blob--1{width:55vw;height:55vw;left:-12vw;top:-22vw;background:radial-gradient(circle,var(--aurora-1),transparent 65%)}
+.aurora__blob--2{width:42vw;height:42vw;right:-10vw;top:8vh;background:radial-gradient(circle,var(--aurora-3),transparent 65%);animation-name:auraDrift2;animation-duration:38s;animation-delay:-6s}
+.aurora__blob--3{width:46vw;height:46vw;left:28vw;bottom:-26vw;background:radial-gradient(circle,var(--aurora-2),transparent 65%);animation-duration:44s;animation-delay:-14s}
+.aurora__blob--4{width:30vw;height:30vw;right:18vw;bottom:6vh;background:radial-gradient(circle,var(--aurora-4),transparent 65%);animation-name:auraDrift2;animation-duration:28s;animation-delay:-20s}
+
+/* trame de points : masque centré + masque autour du curseur (--mx / --my) */
+.aurora__grid{
+  position:absolute;inset:0;
+  background-image:radial-gradient(var(--grid-dot) 1px,transparent 1.2px);
+  background-size:26px 26px;
+  -webkit-mask-image:
+    radial-gradient(420px circle at var(--mx,70%) var(--my,20%),#000,transparent 70%),
+    radial-gradient(70% 60% at 50% 35%,rgba(0,0,0,0.45),transparent 75%);
+  mask-image:
+    radial-gradient(420px circle at var(--mx,70%) var(--my,20%),#000,transparent 70%),
+    radial-gradient(70% 60% at 50% 35%,rgba(0,0,0,0.45),transparent 75%);
+}
+/* halo doux qui suit le curseur */
+.aurora__spot{
+  position:absolute;inset:0;
+  background:radial-gradient(600px circle at var(--mx,70%) var(--my,20%),color-mix(in srgb,var(--aurora-1) 45%,transparent),transparent 60%);
+  opacity:0.55;transition:opacity 600ms
+}
+
+/* grain argentique */
+.aurora__grain{
+  position:absolute;inset:-50%;opacity:var(--grain-opacity);mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html.dark .aurora__grain{mix-blend-mode:soft-light;opacity:calc(var(--grain-opacity) * 1.6)}
+
+/* Variante écran de connexion : contenue dans son panneau */
+.aurora--contained{position:absolute}
+
+/* Mode performance : fond figé, sans flou ni suivi */
+html.perf-lite .aurora__blob{animation:none;filter:blur(60px)}
+html.perf-lite .aurora__spot,html.perf-lite .aurora__grain{display:none}
+html.kcq-paused .aurora__blob{animation-play-state:paused}

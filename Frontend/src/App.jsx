@@ -13,9 +13,8 @@ import ContestationsPage from "./pages/shared/ContestationsPage.jsx";
 import TeamPage from "./pages/shared/TeamPage.jsx";
 import DashboardIndicators from "./pages/kpi/DashboardIndicators.jsx";
 
-import { ThemeProvider } from "./theme/theme.js";
 import { ToastProvider } from "./toast/ToastProvider.jsx";
-import AppShell from "./components/AppShell.jsx";
+import AppShell from "./components/shell/AppShell.jsx";
 import { resetSocketAuth } from "./socket.js";
 import api from "./api";
 import { toast } from "./toast/toastBus";
@@ -483,11 +482,11 @@ function App() {
   })();
 
   return (
-    <ThemeProvider defaultTheme="light">
+    <>
       <ToastProvider>
         {content}
       </ToastProvider>
-    </ThemeProvider>
+    </>
   );
 }
 

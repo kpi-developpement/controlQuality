@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../../api";
 import PageHeader from "../../components/PageHeader.jsx";
 import PerimeterFilters, { perimeterParams } from "../../components/PerimeterFilters.jsx";
-import KpiCard, { fmtRate, toneFor, monthRange, currentMonth } from "../../components/KpiCard.jsx";
+import KpiCard from "../../components/KpiCard.jsx";
+import { fmtRate, toneFor, monthRange, currentMonth } from "../../utils/kpiFormat.js";
 import { exportToXlsx } from "../admin/components/exportXlsx.js";
 import Select from "../../ui/Select.jsx";
 

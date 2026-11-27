@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../api";
 import PageHeader from "../../components/PageHeader.jsx";
-import KpiCard, { fmtRate } from "../../components/KpiCard.jsx";
+import KpiCard from "../../components/KpiCard.jsx";
+import { fmtRate } from "../../utils/kpiFormat.js";
 import { exportToXlsx } from "../admin/components/exportXlsx.js";
 import { fetchComplete } from "../../utils/fetchComplete.js";
 import { DIRECTIONS, directionLabel, fmtDate, getCurrentUser, navigate } from "../../utils/evalMeta.js";

@@ -1,0 +1,37 @@
+/* =====================================================================
+   KYNTUS CQ — Feuille de style d'entrée
+   Ordre : polices → jetons → base → mouvement → composants → mise en page → écrans.
+   Chaque fichier ne traite qu'un sujet : pour modifier un élément, ouvrir son fichier.
+   ===================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,400&family=JetBrains+Mono:wght@500;600&display=swap');
+
+@import './tokens.css';
+@import './base.css';
+@import './motion.css';
+
+/* Composants */
+@import './components/buttons.css';
+@import './components/inputs.css';
+@import './components/select.css';
+@import './components/cards.css';
+@import './components/badges.css';
+@import './components/tables.css';
+@import './components/overlays.css';
+@import './components/feedback.css';
+@import './components/charts.css';
+@import './components/assistant.css';
+
+/* Mise en page */
+@import './layout/background.css';
+@import './layout/shell.css';
+@import './layout/page.css';
+
+/* Écrans */
+@import './features/login.css';
+@import './features/evaluation.css';
+@import './features/grids.css';
+@import './features/objectives.css';
+@import './features/score-modal.css';
+@import './features/agent.css';
+@import './features/users.css';
+@import './features/kpi.css';

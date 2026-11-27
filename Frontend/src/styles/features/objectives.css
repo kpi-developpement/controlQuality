@@ -1,0 +1,30 @@
+/* =====================================================================
+   Objectifs qualité : matrice, puces, barres de progression
+   ===================================================================== */
+.obj-help{font-size:.82rem;color:var(--muted);margin-bottom:12px}
+.obj-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.obj-table th.num,.obj-table td.num{text-align:center}
+.obj-num{width:84px;text-align:center;padding:6px 8px}
+.obj-table .kselect{min-width:130px}
+.obj-table tr.is-dirty td{background:color-mix(in srgb,var(--warning) 8%,transparent)}
+.obj-progress{display:grid;gap:12px}
+.obj-bar{height:8px;border-radius:99px;background:var(--chip);overflow:hidden;min-width:80px}
+.obj-bar>span{display:block;height:100%;border-radius:inherit;background:var(--tone,var(--primary));transition:width .6s var(--ease-out,ease)}
+.obj-cell{display:flex;flex-direction:column;gap:4px;min-width:110px}
+.obj-cell__nums{font-size:.78rem;font-weight:700}
+.obj-cell__nums small{color:var(--muted);font-weight:600}
+.obj-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.obj-chips{display:flex;flex-wrap:wrap;gap:6px}
+.obj-chip{border:1px solid var(--border);background:var(--panel);color:var(--text-secondary);font-weight:700;font-size:.8rem;padding:6px 12px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s,border-color .2s}
+.obj-chip:hover{border-color:var(--primary)}
+.obj-chip.is-on{background:var(--primary-bg);color:var(--primary);border-color:var(--primary-border,var(--primary))}
+.obj-chip:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.obj-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:14px}
+.obj-table{margin:0}
+.obj-table th.obj-grouphead{border-left:2px solid var(--border-strong);text-transform:none;letter-spacing:0;font-size:.82rem;color:var(--text)}
+.obj-table th.obj-subhead{font-size:.7rem;white-space:nowrap}
+.obj-table .obj-cellgrp--cq,.obj-table th.obj-subhead:nth-child(3n/**/+1){border-left:2px solid var(--border-strong)}
+.obj-table .obj-num{width:64px}
+.obj-table .obj-sticky{position:sticky;left:0;background:var(--panel);z-index:1}
+.obj-table tr.is-dirty td.obj-sticky{background:color-mix(in srgb,var(--warning) 8%,var(--panel))}
+.obj-cell__left{font-size:.72rem;color:var(--muted);font-weight:600}

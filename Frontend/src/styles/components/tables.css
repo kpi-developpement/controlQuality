@@ -1,0 +1,34 @@
+/* =====================================================================
+   Tableaux de données
+   En-tête collant, lignes aérées, survol lumineux avec liseré à gauche.
+   ===================================================================== */
+.data-table,.card table:not(.data-table){width:100%;border-collapse:separate;border-spacing:0}
+.content table{border-collapse:separate;border-spacing:0}
+
+.data-table thead th,
+.content table:not(.nep__table) thead th{
+  position:sticky;top:0;z-index:2;
+  text-align:left;padding:0.72rem 0.9rem;white-space:nowrap;
+  font-family:var(--font-display);font-size:0.66rem;font-weight:650;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);
+  background:color-mix(in srgb,var(--panel-2) 92%,transparent);
+  border-bottom:1px solid var(--border-strong);
+}
+.data-table thead th:first-child,.content table:not(.nep__table) thead th:first-child{border-top-left-radius:12px}
+.data-table thead th:last-child,.content table:not(.nep__table) thead th:last-child{border-top-right-radius:12px}
+
+.data-table tbody td,
+.content table:not(.nep__table) tbody td{
+  padding:0.78rem 0.9rem;border-bottom:1px solid var(--border);font-size:0.875rem;vertical-align:middle;
+  font-variant-numeric:tabular-nums;
+  transition:background-color 180ms var(--ease-std),color 180ms,box-shadow 180ms
+}
+.data-table tbody tr:last-child td,.content table:not(.nep__table) tbody tr:last-child td{border-bottom:none}
+.data-table tbody tr:nth-child(even) td,.content table:not(.nep__table) tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--panel-2) 35%,transparent)}
+.data-table tbody tr:hover td,.content table:not(.nep__table) tbody tr:hover td{background:color-mix(in srgb,var(--primary) 8%,transparent)}
+.data-table tbody tr:hover td:first-child,.content table:not(.nep__table) tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--primary);color:var(--primary)}
+.content table tbody tr:has(button,a){cursor:pointer}
+
+.data-table tr.is-selected td{background:var(--primary-bg)}
+.data-table tr.is-clickable,.content tr.is-clickable{cursor:pointer}
+.data-table tr.is-clickable:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}

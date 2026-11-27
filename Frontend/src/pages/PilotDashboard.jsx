@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { CHART } from "../ui/chartColors.js";
 import api from "../api.js";
 import PeriodFilter from "../components/PeriodFilter.jsx";
 import { initialPeriod, inPeriod, localDate } from "../utils/period.mjs";
@@ -122,12 +123,12 @@ function PilotDashboard() {
         {trendData.length > 1 ? (
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={trendData}>
-              <defs><linearGradient id="gP" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2456e6" stopOpacity={0.2}/><stop offset="100%" stopColor="#2456e6" stopOpacity={0}/></linearGradient></defs>
+              <defs><linearGradient id="gP" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={CHART.primary} stopOpacity={0.2}/><stop offset="100%" stopColor={CHART.primary} stopOpacity={0}/></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v) => `${v}%`} contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: "0.85rem" }} />
-              <Area type="monotone" dataKey="avg" stroke="#2456e6" strokeWidth={2.5} fill="url(#gP)" dot={{ r: 4, fill: "#2456e6" }} />
+              <Area type="monotone" dataKey="avg" stroke={CHART.primary} strokeWidth={2.5} fill="url(#gP)" dot={{ r: 4, fill: CHART.primary }} />
             </AreaChart>
           </ResponsiveContainer>
         ) : trendData.length === 1 ? (

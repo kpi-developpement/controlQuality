@@ -1,0 +1,90 @@
+/* =====================================================================
+   Boutons : primaire (lumineux), fantôme (verre), danger, icône.
+   Survol : lueur + reflet qui balaie ; appui : compression « ressort ».
+   ===================================================================== */
+.btn,.btn-primary,.btn-outline,.btn-danger{
+  position:relative;overflow:hidden;isolation:isolate;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border:1px solid transparent;border-radius:11px;padding:0.56rem 1.05rem;
+  font-weight:650;font-size:0.875rem;letter-spacing:-0.005em;white-space:nowrap;cursor:pointer;
+  transition:
+    transform var(--dur-spring) var(--spring),
+    box-shadow var(--dur) var(--ease-std),
+    background-color var(--dur) var(--ease-std),
+    border-color var(--dur) var(--ease-std),
+    color var(--dur) var(--ease-std),
+    filter var(--dur) var(--ease-std);
+}
+.btn .ico,.btn-outline .ico{font-size:1.05em}
+
+/* --- Primaire --- */
+.btn,.btn-primary{
+  background:var(--grad-primary);color:#fff;
+  border-color:color-mix(in srgb,var(--primary) 60%,rgba(255,255,255,0.25));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.22),inset 0 -1px 0 rgba(0,0,0,0.12),0 1px 2px rgba(10,30,90,0.25),0 6px 18px -8px color-mix(in srgb,var(--primary) 80%,transparent);
+}
+/* Reflet qui balaie le bouton au survol */
+.btn:not(.btn--ghost):not(.btn--danger)::after,.btn-primary::after{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,0.28) 48%,transparent 66%);
+  transform:translateX(-120%);transition:transform 700ms var(--ease-out);
+}
+.btn:not(.btn--ghost):not(.btn--danger):hover::after,.btn-primary:hover::after{transform:translateX(120%)}
+.btn:hover,.btn-primary:hover{
+  transform:translateY(-1px);filter:brightness(1.06);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),inset 0 -1px 0 rgba(0,0,0,0.12),0 2px 4px rgba(10,30,90,0.2),var(--glow-primary);
+}
+.btn:active,.btn-primary:active,.btn-outline:active,.btn-danger:active{transform:translateY(0) scale(0.965);transition-duration:90ms}
+.btn:disabled,.btn-primary:disabled,.btn-outline:disabled,.btn-danger:disabled{opacity:0.5;cursor:not-allowed;transform:none;filter:none;box-shadow:none}
+.btn:focus-visible,.btn-primary:focus-visible,.btn-outline:focus-visible,.btn-danger:focus-visible{outline:none;box-shadow:var(--ring)}
+
+/* --- Fantôme / contour (verre) --- */
+.btn--ghost,.btn-outline{
+  background:color-mix(in srgb,var(--panel) 70%,transparent);color:var(--text);
+  border-color:var(--border-strong);
+  box-shadow:var(--card-highlight),var(--shadow-xs);
+}
+.btn--ghost:hover,.btn-outline:hover{
+  background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--text);filter:none;
+  border-color:var(--primary-border);transform:translateY(-1px);
+  box-shadow:var(--card-highlight),0 8px 20px -10px color-mix(in srgb,var(--primary) 55%,transparent);
+}
+
+/* --- Danger --- */
+.btn--danger{
+  background:linear-gradient(180deg,#f25555,#d92d2d);border-color:rgba(255,255,255,0.15);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.2),0 6px 18px -8px rgba(220,38,38,0.7);
+}
+.btn--danger:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,0.22),0 12px 26px -10px rgba(220,38,38,0.75)}
+.btn-danger{
+  background:var(--danger-bg);color:var(--danger);
+  border-color:color-mix(in srgb,var(--danger) 26%,transparent);
+}
+.btn-danger:hover{background:var(--danger);color:#fff;border-color:var(--danger);transform:translateY(-1px);box-shadow:0 10px 22px -10px var(--danger)}
+.btn-danger-solid,.btn.btn-danger-solid{background:var(--danger)!important;color:#fff!important;border-color:var(--danger)!important;background-image:none!important}
+.btn-danger-solid:hover:not(:disabled){filter:brightness(1.08);box-shadow:0 8px 22px -8px color-mix(in srgb,var(--danger) 70%,transparent)}
+
+/* --- Tailles --- */
+.btn--sm{padding:0.38rem 0.78rem;font-size:0.8rem;border-radius:9px;gap:5px}
+
+/* --- Ondulation au clic (src/ui/motion.js) --- */
+.ripple{position:absolute;border-radius:50%;pointer-events:none;background:currentColor;opacity:0.22;transform:scale(0);animation:ripple 620ms var(--ease-out) forwards;z-index:-1}
+.btn:not(.btn--ghost) .ripple,.btn-primary .ripple{background:#fff;opacity:0.32}
+
+/* --- Bouton icône (barre du haut, actions) --- */
+.iconbtn{
+  position:relative;overflow:hidden;flex-shrink:0;
+  width:38px;height:38px;border-radius:12px;border:1px solid var(--border);
+  background:color-mix(in srgb,var(--panel) 60%,transparent);color:var(--text-secondary);
+  cursor:pointer;display:grid;place-items:center;
+  box-shadow:var(--card-highlight);
+  transition:background-color var(--dur),color var(--dur),border-color var(--dur),transform var(--dur-spring) var(--spring);
+}
+.iconbtn:hover{background:var(--primary-bg);color:var(--primary);border-color:var(--primary-border);transform:translateY(-1px)}
+.iconbtn:active{transform:scale(0.9);transition-duration:90ms}
+.iconbtn:disabled{opacity:0.5;cursor:not-allowed}
+.iconbtn svg{transition:transform var(--dur-spring) var(--spring-bouncy)}
+.iconbtn:hover svg{transform:rotate(-8deg) scale(1.1)}
+.iconbtn.is-on{color:var(--warning);border-color:color-mix(in srgb,var(--warning) 35%,transparent);background:var(--warning-bg)}
+
+html.perf-lite .btn::after,html.perf-lite .btn-primary::after{display:none}

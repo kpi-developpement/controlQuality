@@ -5,7 +5,6 @@ import AsyncSelect from "react-select/async";
 import { useToast } from "../../toast/ToastProvider.jsx";
 import HelpTip from "../../components/HelpTip.jsx";
 import { loadClosureCodes, typeLabel, DIRECTIONS } from "../../utils/evalMeta.js";
-import "./NewEvaluationPage.css";
 import Ico from "../../ui/Ico.jsx";
 import Select from "../../ui/Select.jsx";
 

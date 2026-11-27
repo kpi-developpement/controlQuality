@@ -1,0 +1,89 @@
+/* =====================================================================
+   Mouvement : keyframes partagées, entrée de page, transitions de vue,
+   animations pilotées par le défilement, réduction des animations.
+   Règle d'or : on n'anime que transform et opacity (GPU).
+   ===================================================================== */
+
+/* --- Keyframes partagées (utilisées aussi dans des styles inline) --- */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px) scale(0.98)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:scale(0.92)}to{opacity:1;transform:none}}
+@keyframes modalIn{from{opacity:0;transform:translateY(14px) scale(0.96)}to{opacity:1;transform:none}}
+@keyframes pageIn{from{opacity:0}to{opacity:1}}
+@keyframes riseIn{from{opacity:0;translate:0 14px}to{opacity:1;translate:none}}
+@keyframes crumbIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@keyframes titleIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes valueIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes tickIn{from{opacity:0;transform:scale(0.4)}to{opacity:1;transform:none}}
+@keyframes themeIconIn{from{opacity:0;transform:rotate(-90deg) scale(0.5)}to{opacity:1;transform:none}}
+@keyframes kselectIn{from{opacity:0;transform:translateY(-6px) scale(0.98)}to{opacity:1;transform:none}}
+@keyframes kselectInUp{from{opacity:0;transform:translateY(6px) scale(0.98)}to{opacity:1;transform:none}}
+@keyframes shimmer{to{transform:translateX(100%)}}
+@keyframes ripple{to{transform:scale(1);opacity:0}}
+@keyframes netbar{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+@keyframes dotPulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}50%{box-shadow:0 0 0 6px color-mix(in srgb,currentColor 0%,transparent)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+@keyframes wordIn{from{opacity:0;transform:translateY(0.6em);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+@keyframes auraDrift{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  33%{transform:translate3d(6vw,-4vh,0) scale(1.08)}
+  66%{transform:translate3d(-4vw,5vh,0) scale(0.95)}
+  100%{transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes auraDrift2{
+  0%{transform:translate3d(0,0,0) scale(1) rotate(0deg)}
+  50%{transform:translate3d(-7vw,3vh,0) scale(1.12) rotate(18deg)}
+  100%{transform:translate3d(0,0,0) scale(1) rotate(0deg)}
+}
+
+/* --- Entrée de page : contenu qui monte en cascade --- */
+.content.is-entering{animation:pageIn 380ms var(--ease-out) both}
+.content.is-entering .page > *{animation:riseIn var(--dur-spring) var(--spring) both}
+.content.is-entering .page > *:nth-child(1){animation-delay:10ms}
+.content.is-entering .page > *:nth-child(2){animation-delay:60ms}
+.content.is-entering .page > *:nth-child(3){animation-delay:110ms}
+.content.is-entering .page > *:nth-child(4){animation-delay:160ms}
+.content.is-entering .page > *:nth-child(5){animation-delay:200ms}
+.content.is-entering .page > *:nth-child(n+6){animation-delay:240ms}
+
+/* --- View Transitions API ---
+   Utilisée pour le changement de thème (dévoilement circulaire, ui/motion.js) et disponible via
+   ui/viewTransition.js pour un changement d'état ponctuel (ex. « Voir cet agent ») :
+   le contenu (.content) est alors la zone animée (classe html.vt-page). */
+html.vt-page .content{view-transition-name:kcq-page}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition{pointer-events:none}
+::view-transition-old(kcq-page){animation:vtOut 180ms var(--ease-std) both}
+::view-transition-new(kcq-page){animation:vtIn 340ms var(--spring) both}
+@keyframes vtOut{to{opacity:0;transform:translateY(-6px) scale(0.995)}}
+@keyframes vtIn{from{opacity:0;transform:translateY(12px)}}
+
+/* --- Animations pilotées par le défilement (CSS natif, 60 i/s, sans JavaScript) ---
+   Les cartes apparaissent en douceur quand elles entrent dans la vue.
+   Image finale « translate: none » : aucune incidence sur les éléments position:fixed. */
+@supports (animation-timeline: view()){
+  .content .page > .card,
+  .content .page > div > .card,
+  .content .reveal{
+    animation:scrollReveal linear both;
+    animation-timeline:view();
+    animation-range:entry 0% entry 28%;
+  }
+  .content.is-entering .page > .card{animation:scrollReveal linear both;animation-timeline:view();animation-range:entry 0% entry 28%}
+}
+/* « translate » / « scale » (propriétés individuelles) : se combinent avec le transform du survol / de l'inclinaison */
+@keyframes scrollReveal{from{opacity:0.001;translate:0 22px;scale:0.985}to{opacity:1;translate:none;scale:none}}
+
+/* --- Mode performance & pause : pas de mouvement superflu --- */
+html.perf-lite *{transition-duration:120ms !important}
+html.perf-lite .content.is-entering,
+html.perf-lite .content.is-entering .page > *{animation-duration:160ms !important;animation-delay:0ms !important}
+html.kcq-paused .aurora *{animation-play-state:paused !important}
+
+/* --- Réduction des animations demandée par le système --- */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:1ms !important;animation-iteration-count:1 !important;transition-duration:1ms !important;scroll-behavior:auto !important}
+  ::view-transition-old(kcq-page),::view-transition-new(kcq-page){animation:none}
+}

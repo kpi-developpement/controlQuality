@@ -1,24 +1,22 @@
-// src/main.jsx
+// src/main.jsx — point d'entrée
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
-import './index.css';
-import './styles/luxe.css';
-import './styles/polish.css';
-import './styles/features.css';
+import './styles/index.css';
 import api from './api.js';
-import { initRipple, attachNetworkProgress, initCardGlow } from './ui/motion.js';
+import { initRipple, attachNetworkProgress } from './ui/motion.js';
+import { initSpotlight } from './ui/spotlight.js';
+import { initTilt } from './ui/tilt.js';
 import { initPerf } from './ui/perf.js';
+import { readTheme } from './ui/themeStore.js';
 
-// Applique le thème mémorisé avant le premier rendu (évite le flash clair → sombre)
-try {
-  const t = localStorage.getItem('theme');
-  if (t === 'dark' || t === 'light') document.documentElement.classList.add(t);
-} catch { /* ignore */ }
+// Thème appliqué avant le premier rendu (sombre par défaut ; évite un flash clair → sombre)
+document.documentElement.classList.add(readTheme());
 
 initPerf();
 initRipple();
-initCardGlow();
+initSpotlight();
+initTilt();
 attachNetworkProgress(api);
 
 ReactDOM.createRoot(document.getElementById('root')).render(

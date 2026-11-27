@@ -1,4 +1,6 @@
+import { withViewTransition } from "../ui/viewTransition.js";
 import React, { useEffect, useMemo, useState } from "react";
+import { CHART } from "../ui/chartColors.js";
 import Ico from "../ui/Ico.jsx";
 import api from "../api";
 import ScopeFilters from "../components/ScopeFilters.jsx";
@@ -84,8 +86,9 @@ export default function AgentPerformance({ role }) {
     return { types: t, signed, required, inProgress, done };
   }, [agentScores]);
 
-  const showAgent = (id) => { setAgentId(id); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const backToAll = () => setAgentId("");
+  // Passage liste ↔ fiche agent animé par le navigateur (View Transitions API)
+  const showAgent = (id) => { withViewTransition(() => setAgentId(id)); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const backToAll = () => withViewTransition(() => setAgentId(""));
   const openEvaluation = (s) => {
     setOpenScore(null);
     window.dispatchEvent(new CustomEvent("kcq:navigate", { detail: { role, view: "new", editScoreId: String(s._id) } }));
@@ -142,7 +145,7 @@ export default function AgentPerformance({ role }) {
       </div>
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
         <h3>Évolution quotidienne du score moyen{agent ? ` — ${agent.name}` : ""}</h3>
-        {trend.length ? <ResponsiveContainer width="100%" height={240}><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis domain={[0, 100]} /><Tooltip /><Line dataKey="avg" name="Score moyen (%)" stroke="#2456e6" strokeWidth={2} /></LineChart></ResponsiveContainer> : <p>Aucune évaluation pour cette sélection.</p>}
+        {trend.length ? <ResponsiveContainer width="100%" height={240}><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis domain={[0, 100]} /><Tooltip /><Line dataKey="avg" name="Score moyen (%)" stroke={CHART.primary} strokeWidth={2} /></LineChart></ResponsiveContainer> : <p>Aucune évaluation pour cette sélection.</p>}
       </div>
       {!agent ? <div className="card" style={{ overflowX: "auto" }}><table className="data-table"><thead><tr><th>Agent</th><th>Cellule</th><th>Évaluations</th><th>Score moyen</th><th>Contestées</th><th>Coachings requis</th><th>Détail</th></tr></thead><tbody>
         {byAgent.map((a) => <tr key={a.id}><td>{a.name}</td><td>{a.cell || "—"}</td><td>{a.count}</td><td><span className={scoreBadgeClass(a.avg)}>{a.avg.toFixed(1)} %</span></td><td>{a.contested}</td><td>{a.required ? <span className="badge badge--danger">{a.required}</span> : "0"}</td><td><button className="btn btn--ghost btn--sm" disabled={a.id === "deleted"} onClick={() => showAgent(a.id)}>Voir cet agent</button></td></tr>)}

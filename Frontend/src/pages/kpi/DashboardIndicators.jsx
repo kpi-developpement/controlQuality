@@ -1,10 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../api";
 import ScopeFilters from "../../components/ScopeFilters.jsx";
+import PageHeader from "../../components/PageHeader.jsx";
 import { initialScopeFilters, scopeParams } from "../../utils/scopeFilters.js";
 import PeriodFilter from "../../components/PeriodFilter.jsx";
-import KpiCard, { fmtRate, toneFor } from "../../components/KpiCard.jsx";
+import KpiCard from "../../components/KpiCard.jsx";
+import { fmtRate, toneFor } from "../../utils/kpiFormat.js";
 import KpiDashboard from "./KpiDashboard.jsx";
+import { FiAward, FiClipboard, FiTarget, FiLayers, FiCheckCircle, FiThumbsUp, FiCheckSquare, FiAlertTriangle, FiAlertOctagon, FiBookOpen, FiUsers, FiHeadphones, FiLogIn } from "react-icons/fi";
+
+// Icône de chaque indicateur (tuiles du tableau de bord)
+const ICONS = {
+  qualityScore: <FiAward />, evaluations: <FiClipboard />, calibrations: <FiTarget />, pickings: <FiLayers />,
+  coachingValidation: <FiCheckCircle />, evaluationValidation: <FiThumbsUp />, calibrationValidation: <FiCheckSquare />,
+  evaluationContestation: <FiAlertTriangle />, calibrationContestation: <FiAlertOctagon />, quizCompletion: <FiBookOpen />,
+  coverage: <FiUsers />, coachingRate: <FiHeadphones />, connection: <FiLogIn />,
+};
 import { exportToXlsx } from "../admin/components/exportXlsx.js";
 import { localDate } from "../../utils/period.mjs";
 
@@ -73,16 +84,14 @@ export default function DashboardIndicators({ role, title = "Tableau de bord" })
 
   return (
     <div className="page">
-      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div>
-          <div className="page-title">{title}</div>
-          <div>Indicateurs qualité sur {SCOPE_TEXT[role] || "votre périmètre"}. Période : date de l'évaluation.</div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
+      <PageHeader
+        title={title}
+        subtitle={`Indicateurs qualité sur ${SCOPE_TEXT[role] || "votre périmètre"}. Période : date de l'évaluation.`}
+        right={<>
           <button className="btn btn--ghost" type="button" onClick={() => setTick((x) => x + 1)} disabled={loading}>Actualiser</button>
           <button className="btn" type="button" onClick={onExport} disabled={loading || !indicators.length}>Exporter Excel</button>
-        </div>
-      </div>
+        </>}
+      />
 
       {isAgent
         ? <div className="card filters-card"><PeriodFilter value={filters.period} onChange={(period) => setFilters({ ...filters, period })} /></div>
@@ -95,14 +104,19 @@ export default function DashboardIndicators({ role, title = "Tableau de bord" })
       ) : (
         <>
           {!isAgent && data && <div style={{ color: "var(--muted)", fontSize: "0.82rem", marginBottom: 10 }}><b style={{ color: "var(--text)" }}>{data.population?.activeAgents ?? 0}</b> agents actifs dans le périmètre{loading ? " · mise à jour…" : ""}</div>}
-          {counts.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 12 }}>
-              {counts.map((i) => <KpiCard key={i.key} title={i.label} value={display(i)} tone={i.kind === "percent" ? toneFor(i.value, 80, 50) : undefined} detail={detail(i)} formula={i.formula} />)}
-            </div>
-          )}
-          {rates.length > 0 && (
-            <div className="kpi-formulas" style={{ marginBottom: 16 }}>
-              {rates.map((i) => <KpiCard key={i.key} title={i.label} value={display(i)} tone={tone(i)} detail={detail(i)} formula={i.formula} />)}
+          {indicators.length > 0 && (
+            <div className="bento">
+              {counts.map((i) => (
+                <KpiCard key={i.key} title={i.label} value={display(i)} detail={detail(i)} formula={i.formula}
+                  size={i.key === "qualityScore" ? "hero" : undefined}
+                  tone={i.kind === "percent" ? toneFor(i.value, 80, 50) : undefined}
+                  meter={i.kind === "percent" ? i.value : undefined}
+                  icon={ICONS[i.key]} />
+              ))}
+              {rates.map((i) => (
+                <KpiCard key={i.key} title={i.label} value={display(i)} tone={tone(i)} detail={detail(i)} formula={i.formula}
+                  meter={i.key === "coachingRate" ? undefined : i.value} icon={ICONS[i.key]} />
+              ))}
             </div>
           )}
           {!loading && !indicators.length && <div className="card empty-state"><div className="empty-state__text">Aucun indicateur disponible pour votre rôle.</div></div>}

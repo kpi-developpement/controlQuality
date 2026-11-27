@@ -1,0 +1,88 @@
+/* =====================================================================
+   Champs de saisie
+   - .input : champ standard (fond légèrement en creux, anneau de focus qui s'étend)
+   - champs bruts dans les pages / fenêtres : même rendu sans classe
+   - .ffield : champ à libellé flottant + micro-validation (src/ui/FloatingField.jsx)
+   ===================================================================== */
+.input,
+:where(.content,.modal,.modal-overlay,.kcq-modal) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=hidden]):not(.search__input):not(.ffield__control),textarea){
+  width:100%;font:inherit;font-size:0.875rem;color:var(--text);
+  background:color-mix(in srgb,var(--panel) 86%,transparent);
+  border:1px solid var(--border-strong);border-radius:11px;padding:0.6rem 0.8rem;outline:none;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.06),0 0 0 0 transparent;
+  transition:border-color var(--dur) var(--ease-std),box-shadow 320ms var(--spring),background-color var(--dur) var(--ease-std);
+}
+html.dark .input,
+html.dark :where(.content,.modal,.modal-overlay,.kcq-modal) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=hidden]):not(.search__input):not(.ffield__control),textarea){
+  background:rgba(4,9,22,0.45);box-shadow:inset 0 1px 2px rgba(0,0,0,0.35),0 0 0 0 transparent;
+}
+.input:hover,
+:where(.content,.modal,.modal-overlay) :where(input,textarea):hover{border-color:color-mix(in srgb,var(--primary) 40%,var(--border-strong))}
+/* Anneau de focus : s'étend vers l'extérieur avec un ressort, bordure lumineuse */
+.input:focus,
+:where(.content,.modal,.modal-overlay) :where(input,textarea):focus{
+  border-color:var(--primary);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.06),0 0 0 4px color-mix(in srgb,var(--primary) 18%,transparent),0 0 24px -6px color-mix(in srgb,var(--primary) 55%,transparent);
+}
+.input::placeholder{color:var(--muted);opacity:0.8}
+.input:disabled,.input[readonly]{background:var(--chip);color:var(--muted);cursor:not-allowed}
+textarea.input{resize:vertical;min-height:84px;line-height:1.55}
+select.input{
+  cursor:pointer;appearance:none;-webkit-appearance:none;padding-right:2.1rem;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237d8bad' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 0.75rem center;
+}
+select.input option{background:var(--panel);color:var(--text)}
+
+.label{display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem;font-weight:650;color:var(--text-secondary);letter-spacing:0.01em;transition:color var(--dur)}
+.label:focus-within{color:var(--primary)}
+.content label{color:var(--text-secondary);font-weight:600;font-size:0.82rem}
+
+/* Champ invalide (aria-invalid) : secousse douce */
+.input[aria-invalid="true"],.ffield.is-invalid .ffield__box{border-color:var(--danger);animation:shake 420ms var(--ease-std)}
+
+/* ---------------------------------------------------------------------
+   .ffield — libellé flottant
+   Le texte d'aide démarre dans le champ puis glisse au-dessus en rétrécissant.
+   --------------------------------------------------------------------- */
+.ffield{position:relative;display:block}
+.ffield__box{
+  position:relative;display:flex;align-items:center;gap:10px;
+  min-height:56px;padding:0 14px;border-radius:14px;
+  background:color-mix(in srgb,var(--panel) 86%,transparent);
+  border:1px solid var(--border-strong);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.06);
+  transition:border-color var(--dur),box-shadow 320ms var(--spring),background-color var(--dur);
+}
+html.dark .ffield__box{background:rgba(4,9,22,0.5)}
+.ffield__box:hover{border-color:color-mix(in srgb,var(--primary) 40%,var(--border-strong))}
+.ffield:focus-within .ffield__box{
+  border-color:var(--primary);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 18%,transparent),0 0 28px -8px color-mix(in srgb,var(--primary) 60%,transparent);
+}
+.ffield__icon{flex-shrink:0;color:var(--muted);display:grid;place-items:center;transition:color var(--dur),transform var(--dur-spring) var(--spring-bouncy)}
+.ffield:focus-within .ffield__icon{color:var(--primary);transform:scale(1.08)}
+.ffield__inner{position:relative;flex:1;min-width:0;align-self:stretch}
+.ffield__control{
+  width:100%;height:100%;border:0;outline:0;background:transparent;color:var(--text);
+  font:inherit;font-size:0.95rem;padding:22px 0 8px;
+}
+.ffield__label{
+  position:absolute;left:0;top:50%;pointer-events:none;color:var(--muted);font-size:0.95rem;font-weight:500;
+  transform:translateY(-50%);transform-origin:left center;white-space:nowrap;
+  transition:transform 360ms var(--spring),color var(--dur),font-weight var(--dur);
+}
+.ffield__control::placeholder{color:transparent}
+.ffield__control:focus + .ffield__label,
+.ffield__control:not(:placeholder-shown) + .ffield__label{transform:translateY(-118%) scale(0.76);color:var(--primary);font-weight:650}
+.ffield__control:not(:focus):not(:placeholder-shown) + .ffield__label{color:var(--text-secondary)}
+/* coche de validation : apparaît avec un ressort */
+.ffield__ok{
+  flex-shrink:0;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  background:var(--success-bg);color:var(--success);opacity:0;transform:scale(0.3);
+  transition:opacity 200ms,transform var(--dur-spring) var(--spring-bouncy);
+}
+.ffield.is-valid .ffield__ok{opacity:1;transform:none}
+.ffield__trail{flex-shrink:0;display:flex;align-items:center}
+.ffield__hint{margin-top:6px;font-size:0.76rem;color:var(--muted)}
+.ffield.is-invalid .ffield__hint{color:var(--danger);font-weight:600}

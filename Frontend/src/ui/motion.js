@@ -1,6 +1,7 @@
 // src/ui/motion.js — micro-interactions globales (sans dépendance)
 // - Ripple sur les boutons et les éléments de navigation
 // - Barre de progression fine pendant les requêtes réseau (axios)
+// - Changement de thème avec dévoilement circulaire (View Transitions)
 
 const RIPPLE_SELECTOR = ".btn, .btn-primary, .btn-outline, .btn-danger, .nav__item, .iconbtn";
 
@@ -85,9 +86,12 @@ export function withThemeTransition(event, apply) {
   const x = event?.clientX ?? window.innerWidth - 60;
   const y = event?.clientY ?? 32;
   const r = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+  // Pendant le changement de thème, tout l'écran est révélé d'un bloc (pas de transition de page séparée)
+  doc.documentElement.classList.add("vt-theme");
   const t = doc.startViewTransition(() => {
     apply();
   });
+  t.finished.finally(() => doc.documentElement.classList.remove("vt-theme"));
   t.ready
     .then(() => {
       doc.documentElement.animate(
@@ -96,28 +100,4 @@ export function withThemeTransition(event, apply) {
       );
     })
     .catch(() => {});
-}
-
-/** Halo des cartes : pose --cx/--cy (position de la souris dans la carte survolée). */
-export function initCardGlow() {
-  if (typeof document === "undefined" || document.__kcqCardGlow) return;
-  document.__kcqCardGlow = true;
-  let raf = 0, last = null;
-  document.addEventListener(
-    "pointermove",
-    (e) => {
-      last = e;
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        if (document.documentElement.classList.contains("perf-lite")) return;
-        const card = last.target.closest?.(".card");
-        if (!card) return;
-        const r = card.getBoundingClientRect();
-        card.style.setProperty("--cx", `${last.clientX - r.left}px`);
-        card.style.setProperty("--cy", `${last.clientY - r.top}px`);
-      });
-    },
-    { passive: true }
-  );
 }

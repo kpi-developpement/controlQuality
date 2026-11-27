@@ -1,0 +1,195 @@
+/* =====================================================================
+   Coquille de l'application : barre latérale (rail) + barre du haut
+   - Rail d'icônes (76px) qui s'ouvre au survol par-dessus le contenu, ou épinglé ouvert (256px)
+   - Barre du haut flottante en verre, flou progressif derrière (le contenu défile dessous sans coupure)
+   Composants : src/components/shell/*
+   ===================================================================== */
+.shell{display:flex;min-height:100vh;position:relative}
+
+/* ---------------- Barre latérale ---------------- */
+.sidebar{
+  position:fixed;top:0;left:0;bottom:0;z-index:120;
+  width:var(--side-w);display:flex;flex-direction:column;overflow:hidden;
+  color:var(--side-text);
+  background:var(--side-bg);
+  -webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);
+  border-right:1px solid var(--side-border);
+  box-shadow:inset -1px 0 0 rgba(255,255,255,0.02);
+  transition:width 460ms var(--spring),box-shadow var(--dur-slow);
+}
+/* reflet vertical très fin sur le bord */
+.sidebar::after{
+  content:"";position:absolute;top:0;right:0;bottom:0;width:1px;pointer-events:none;
+  background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--primary) 45%,transparent) 30%,transparent 75%)
+}
+.shell--collapsed .sidebar{width:var(--rail-w)}
+/* Rail : s'ouvre au survol, au-dessus du contenu (sans décaler la page) */
+.shell--collapsed .sidebar:hover,
+.shell--collapsed .sidebar:has(:focus-visible){
+  width:var(--side-w);box-shadow:var(--shadow-lg);
+  background:color-mix(in srgb,var(--panel) 94%,transparent)
+}
+
+.sidebar__top{padding:16px 14px 8px}
+.brand{display:flex;align-items:center;gap:12px;padding:2px;min-width:0}
+.brand__mark{
+  width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex-shrink:0;
+  background:var(--grad-brand);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.3),0 10px 26px -8px color-mix(in srgb,var(--primary) 85%,transparent);
+  transition:transform var(--dur-spring) var(--spring-bouncy)
+}
+.brand:hover .brand__mark{transform:rotate(-8deg) scale(1.06)}
+.brand__text{display:flex;flex-direction:column;gap:2px;line-height:1.1;min-width:0;white-space:nowrap;transition:opacity var(--dur)}
+.brand__name{font-family:var(--font-display);font-weight:800;font-size:1.08rem;letter-spacing:-0.03em;color:var(--side-text-strong)}
+.brand__sub{font-size:0.64rem;font-weight:650;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted)}
+
+.nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 14px 12px;scrollbar-color:transparent transparent}
+.nav:hover{scrollbar-color:var(--border-strong) transparent}
+.nav__section{margin-top:14px}
+.nav__title{
+  padding:4px 12px 8px;font-size:0.62rem;font-weight:750;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--muted);white-space:nowrap;transition:opacity var(--dur)
+}
+.nav__items{display:flex;flex-direction:column;gap:3px}
+.nav__item{
+  position:relative;width:100%;height:42px;display:flex;align-items:center;gap:12px;padding:0 13px;
+  border-radius:12px;border:1px solid transparent;background:transparent;color:var(--side-text);
+  font-weight:600;font-size:0.86rem;text-align:left;white-space:nowrap;cursor:pointer;overflow:hidden;
+  transition:background-color var(--dur),color var(--dur),border-color var(--dur)
+}
+.nav__item:hover{background:var(--side-hover);color:var(--side-text-strong)}
+.nav__item:focus-visible{outline:none;border-color:var(--primary-border);box-shadow:var(--ring)}
+.nav__icon{width:20px;height:20px;display:grid;place-items:center;flex-shrink:0;font-size:18px;transition:transform var(--dur-spring) var(--spring-bouncy),color var(--dur),filter var(--dur)}
+.nav__item:hover .nav__icon{transform:scale(1.12)}
+.nav__label{overflow:hidden;text-overflow:ellipsis;transition:opacity var(--dur)}
+/* entrée active : fond lumineux, icône éclairée, repère vertical */
+.nav__item--active{
+  background:linear-gradient(90deg,var(--side-active),color-mix(in srgb,var(--side-active) 35%,transparent));
+  border-color:color-mix(in srgb,var(--primary) 22%,transparent);
+  color:var(--side-text-strong);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05)
+}
+.nav__item--active .nav__icon{color:var(--primary-light);filter:drop-shadow(0 0 8px color-mix(in srgb,var(--primary) 80%,transparent))}
+.nav__item::before{
+  content:"";position:absolute;left:0;top:25%;bottom:25%;width:3px;border-radius:0 4px 4px 0;
+  background:linear-gradient(180deg,var(--primary-light),var(--accent));
+  box-shadow:0 0 12px var(--primary-light);
+  transform:scaleY(0);transition:transform 500ms var(--spring-bouncy)
+}
+.nav__item--active::before{transform:scaleY(1)}
+
+/* Rail replié : seules les icônes, centrées */
+.shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .brand__text,
+.shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .nav__label,
+.shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .usercard__meta,
+.shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .usercard__logout,
+.shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .sidebar__pin{opacity:0;pointer-events:none}
+/* les titres de section gardent leur hauteur : aucune icône ne bouge quand le rail s'ouvre */
+.shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .nav__title{opacity:0}
+
+.sidebar__bottom{padding:12px 14px 14px;border-top:1px solid var(--side-border)}
+.usercard{display:flex;align-items:center;gap:11px;min-width:0}
+.usercard__avatar{
+  position:relative;width:44px;height:44px;border-radius:14px;flex-shrink:0;display:grid;place-items:center;
+  font-weight:800;font-size:0.85rem;color:#fff;background:var(--grad-brand);cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 8px 20px -10px var(--primary);
+  border:0;transition:transform var(--dur-spring) var(--spring-bouncy)
+}
+.usercard__avatar:hover{transform:scale(1.06)}
+.usercard__avatar::after{content:"";position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:50%;background:var(--success);border:2px solid var(--bg)}
+.usercard__meta{flex:1;min-width:0;cursor:pointer;transition:opacity var(--dur);border:0;background:none;text-align:left;padding:0;color:inherit;font:inherit}
+.usercard__name{display:flex;align-items:center;gap:5px;font-weight:700;font-size:0.86rem;color:var(--side-text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.usercard__role{font-size:0.66rem;font-weight:650;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.usercard__logout,.sidebar__pin{transition:opacity var(--dur)}
+.brand{flex:1}
+.sidebar__top{display:flex;align-items:center;gap:8px}
+.sidebar__pin{width:32px;height:32px;border-radius:10px}
+
+/* ---------------- Zone principale ---------------- */
+.main{
+  position:relative;flex:1;min-width:0;display:flex;flex-direction:column;
+  margin-left:var(--side-w);width:calc(100% - var(--side-w));
+  transition:margin-left 460ms var(--spring),width 460ms var(--spring)
+}
+.shell--collapsed .main{margin-left:var(--rail-w);width:calc(100% - var(--rail-w))}
+
+/* ---------------- Barre du haut (verre flottant) ---------------- */
+.topbar{position:sticky;top:0;z-index:90;padding:12px 24px 10px}
+/* Flou progressif : fort en haut, nul en bas → le contenu disparaît sans coupure nette */
+.topbar::before{
+  content:"";position:absolute;inset:0 0 -18px 0;pointer-events:none;z-index:-1;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  -webkit-mask-image:linear-gradient(180deg,#000 45%,transparent);mask-image:linear-gradient(180deg,#000 45%,transparent);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 70%,transparent),transparent)
+}
+.topbar__bar{
+  display:flex;align-items:center;gap:12px;height:var(--topbar-h);padding:0 12px 0 14px;
+  border-radius:18px;
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%);backdrop-filter:blur(var(--glass-blur)) saturate(160%);
+  border:1px solid var(--glass-border);
+  box-shadow:var(--card-highlight),var(--shadow)
+}
+.topbar__crumbs{display:flex;align-items:center;gap:8px;min-width:0;font-size:0.84rem;white-space:nowrap}
+.topbar__section{color:var(--muted);font-weight:600}
+.topbar__sep{color:var(--muted);opacity:0.6;display:grid;place-items:center}
+.topbar__title{font-weight:750;color:var(--text);overflow:hidden;text-overflow:ellipsis;animation:crumbIn 380ms var(--spring)}
+.topbar__center{flex:1;display:flex;justify-content:center;min-width:0}
+.topbar__actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+/* Recherche « barre de commande » */
+.search-wrapper{position:relative;flex:1;max-width:520px;min-width:200px}
+.search{
+  display:flex;align-items:center;gap:10px;height:42px;padding:0 10px 0 14px;border-radius:13px;
+  background:color-mix(in srgb,var(--panel) 55%,transparent);border:1px solid var(--border);
+  transition:border-color var(--dur),box-shadow 360ms var(--spring),background-color var(--dur)
+}
+.search:hover{border-color:var(--border-strong)}
+.search:focus-within{
+  background:color-mix(in srgb,var(--panel) 85%,transparent);border-color:var(--primary);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 16%,transparent),0 0 30px -6px color-mix(in srgb,var(--primary) 55%,transparent)
+}
+.search__icon{color:var(--muted);flex-shrink:0;transition:color var(--dur),transform var(--dur-spring) var(--spring-bouncy)}
+.search:focus-within .search__icon{color:var(--primary);transform:scale(1.1)}
+.search__input{flex:1;min-width:0;border:none;background:transparent;outline:none;color:var(--text);font-weight:500;font-size:0.875rem}
+.search__input::placeholder{color:var(--muted)}
+/* Suggestions rapides sous la recherche */
+.cmd-chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 6px 4px;border-top:1px solid var(--border);margin-top:4px}
+.cmd-chip{
+  border:1px solid var(--border);background:var(--chip);color:var(--text-secondary);font-size:0.74rem;font-weight:650;
+  padding:4px 10px;border-radius:999px;cursor:pointer;transition:all var(--dur) var(--ease-std)
+}
+.cmd-chip:hover{border-color:var(--primary-border);color:var(--primary);background:var(--primary-bg)}
+
+/* Tiroir mobile */
+.sidebar-backdrop{display:none}
+.topbar__menu{display:none}
+
+@media (max-width:1100px){
+  .live-pill__text{display:none}
+  .live-pill{padding:0 9px}
+}
+@media (max-width:900px){
+  .topbar__crumbs{display:none}
+  .topbar{padding:10px 12px 8px}
+  .search .kbd{display:none}
+  .search-wrapper{min-width:0}
+  .live-pill{display:none}
+}
+@media (max-width:768px){
+  .topbar__menu{display:grid}
+  .sidebar,.shell--collapsed .sidebar{width:var(--side-w);transform:translateX(-102%);transition:transform 460ms var(--spring)}
+  .shell--mobile-open .sidebar{transform:none;box-shadow:var(--shadow-lg)}
+  .shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .brand__text,
+  .shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .nav__label,
+  .shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .usercard__meta{opacity:1;pointer-events:auto}
+  .shell--collapsed .sidebar:not(:hover):not(:has(:focus-visible)) .nav__title{opacity:1}
+  .main,.shell--collapsed .main{margin-left:0;width:100%}
+  .sidebar-backdrop{display:block;position:fixed;inset:0;z-index:110;background:var(--overlay);opacity:0;pointer-events:none;transition:opacity var(--dur)}
+  .shell--mobile-open .sidebar-backdrop{opacity:1;pointer-events:auto}
+  .sidebar__pin{display:none}
+}
+
+html.perf-lite .sidebar,html.perf-lite .topbar__bar,html.perf-lite .topbar::before,html.perf-lite .cmd-menu{-webkit-backdrop-filter:none;backdrop-filter:none}
+html.perf-lite .sidebar{background:var(--panel)}
+html.perf-lite .topbar__bar{background:var(--panel)}

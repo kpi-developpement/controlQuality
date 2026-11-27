@@ -1,0 +1,12 @@
+/* =====================================================================
+   Panneau Admin : mot de passe actuel / génération
+   ===================================================================== */
+.pwd-field{margin-bottom:12px}
+.pwd-current{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--chip);border:1px solid var(--border);color:var(--text-secondary)}
+.pwd-current>span:first-of-type{letter-spacing:.2em;font-weight:800}
+.pwd-current__note{flex-basis:100%;font-size:.78rem;color:var(--muted)}
+.pwd-input{display:flex;gap:6px;align-items:center}
+.pwd-input .input{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em}
+.pwd-saved{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--success-bg);color:var(--success);font-weight:600;font-size:.88rem}
+.pwd-saved code{background:var(--panel);color:var(--text);padding:3px 8px;border-radius:8px;font-size:.9rem;user-select:all}
+.pwd-current__value{background:var(--panel);color:var(--text);padding:3px 10px;border-radius:8px;font-size:.95rem;letter-spacing:.02em;user-select:all}

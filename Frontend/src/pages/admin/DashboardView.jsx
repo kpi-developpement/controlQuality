@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { CHART } from "../../ui/chartColors.js";
 import AnimatedValue from "../../components/AnimatedValue.jsx";
 import api from "../../api";
 import {
@@ -17,7 +18,7 @@ const scoreP = (s) => {
 };
 const fmtD = (d) => { if (!d) return "—"; const dt = new Date(d); return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }); };
 const fmtFull = (d) => { if (!d) return "—"; const dt = new Date(d); return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); };
-const COLORS = ["#2456e6","#059669","#d97706","#dc2626","#0ea5e9","#0891b2","#be185d","#65a30d"];
+const COLORS = [CHART.primary,CHART.success,"#d97706","#dc2626","#0ea5e9","#0891b2","#be185d","#65a30d"];
 const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
 // Contrat Orange : le calibrage est exclu des statistiques (cohérent avec /scores/stats)
 const PROD = "standard,picking,coaching,sample";
@@ -85,7 +86,7 @@ export default function DashboardView() {
   const scoreDist = useMemo(() => {
     let h = 0, m = 0, l = 0;
     for (const s of allScores) { const p = scoreP(s); if (p >= 80) h++; else if (p >= 50) m++; else l++; }
-    return [{ name: "≥ 80%", value: h, color: "#059669" }, { name: "50-79%", value: m, color: "#d97706" }, { name: "< 50%", value: l, color: "#dc2626" }].filter((d) => d.value > 0);
+    return [{ name: "≥ 80%", value: h, color: CHART.success }, { name: "50-79%", value: m, color: "#d97706" }, { name: "< 50%", value: l, color: "#dc2626" }].filter((d) => d.value > 0);
   }, [allScores]);
 
   // Per-evaluator
@@ -195,15 +196,15 @@ export default function DashboardView() {
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={dailyTrend}>
                 <defs>
-                  <linearGradient id="gVol" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2456e6" stopOpacity={0.2} /><stop offset="100%" stopColor="#2456e6" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="gVol" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={CHART.primary} stopOpacity={0.2} /><stop offset="100%" stopColor={CHART.primary} stopOpacity={0} /></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
                 <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: "0.8rem" }} />
-                <Area yAxisId="left" type="monotone" dataKey="count" stroke="#2456e6" fill="url(#gVol)" name="Évaluations" />
-                <Line yAxisId="right" type="monotone" dataKey="avg" stroke="#059669" strokeWidth={2} dot={{ r: 3 }} name="Score moyen %" />
+                <Area yAxisId="left" type="monotone" dataKey="count" stroke={CHART.primary} fill="url(#gVol)" name="Évaluations" />
+                <Line yAxisId="right" type="monotone" dataKey="avg" stroke={CHART.success} strokeWidth={2} dot={{ r: 3 }} name="Score moyen %" />
               </AreaChart>
             </ResponsiveContainer>
           ) : <div style={{ color: "var(--muted)", padding: 30, textAlign: "center" }}>Aucune donnée ce mois.</div>}
@@ -273,8 +274,8 @@ export default function DashboardView() {
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
                 <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
                 <Tooltip formatter={(v) => `${v}%`} contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: "0.8rem" }} />
-                <Bar dataKey="avg" fill="#2456e6" radius={[0, 4, 4, 0]} barSize={14}>
-                  {evalPerf.map((e, i) => <RCell key={i} fill={e.avg >= 80 ? "#059669" : e.avg >= 50 ? "#d97706" : "#dc2626"} />)}
+                <Bar dataKey="avg" fill={CHART.primary} radius={[0, 4, 4, 0]} barSize={14}>
+                  {evalPerf.map((e, i) => <RCell key={i} fill={e.avg >= 80 ? CHART.success : e.avg >= 50 ? "#d97706" : "#dc2626"} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -289,7 +290,7 @@ export default function DashboardView() {
                 <div key={c.cell} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 80, fontSize: "0.8rem", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.cell}</div>
                   <div style={{ flex: 1, background: "var(--chip)", borderRadius: 4, height: 18, overflow: "hidden", position: "relative" }}>
-                    <div style={{ height: "100%", width: `${Math.min(c.avg, 100)}%`, background: c.avg >= 80 ? "#059669" : c.avg >= 50 ? "#d97706" : "#dc2626", borderRadius: 4, transition: "width 0.5s" }} />
+                    <div style={{ height: "100%", width: `${Math.min(c.avg, 100)}%`, background: c.avg >= 80 ? CHART.success : c.avg >= 50 ? "#d97706" : "#dc2626", borderRadius: 4, transition: "width 0.5s" }} />
                   </div>
                   <span style={{ fontWeight: 800, fontSize: "0.78rem", minWidth: 40, textAlign: "right" }}>{c.avg}%</span>
                   <span className="badge badge--muted" style={{ fontSize: "0.68rem" }}>{c.count}</span>
@@ -342,7 +343,7 @@ export default function DashboardView() {
               const sc = scoreP(s);
               return (
                 <div key={String(s._id)} style={{ padding: "8px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: sc >= 80 ? "#059669" : sc >= 50 ? "#d97706" : "#dc2626", flexShrink: 0 }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: sc >= 80 ? CHART.success : sc >= 50 ? "#d97706" : "#dc2626", flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "0.82rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {s.pilotName || s.pilot?.name || "—"} <span style={{ color: "var(--muted)", fontWeight: 500 }}>par {s.evaluatorName || "—"}</span>

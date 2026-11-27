@@ -48,8 +48,10 @@ export default function CQDashboard({ forcedView, onViewChange, editScoreId }) {
   if (view === "grids") return (
     <div className="page">
       <div className="page-head">
-        <div className="page-title"><Ico n="grid" /> Grilles d'évaluation</div>
-        <div>Créez, paramétrez et modifiez les grilles. Les changements s'appliquent immédiatement.</div>
+        <div>
+          <div className="page-title"><Ico n="grid" /> Grilles d'évaluation</div>
+          <div>Créez, paramétrez et modifiez les grilles. Les changements s'appliquent immédiatement.</div>
+        </div>
       </div>
       <GridsView />
     </div>

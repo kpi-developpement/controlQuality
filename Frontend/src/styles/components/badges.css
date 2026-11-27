@@ -1,0 +1,36 @@
+/* =====================================================================
+   Badges / pastilles d'état
+   ===================================================================== */
+.badge{
+  display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+  font-size:0.72rem;font-weight:700;white-space:nowrap;line-height:1.35;letter-spacing:0.01em;
+  border:1px solid transparent;font-variant-numeric:tabular-nums;
+  transition:transform var(--dur-spring) var(--spring)
+}
+.badge .ico{font-size:1.05em}
+tr:hover .badge{transform:translateY(-1px)}
+.badge--success,.badge--warning,.badge--danger{padding-left:8px}
+.badge--success::before,.badge--warning::before,.badge--danger::before{
+  content:"";width:6px;height:6px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 0 3px color-mix(in srgb,currentColor 20%,transparent),0 0 8px currentColor
+}
+.badge--success{background:var(--success-bg);color:var(--success);border-color:color-mix(in srgb,var(--success) 24%,transparent)}
+.badge--warning{background:var(--warning-bg);color:var(--warning);border-color:color-mix(in srgb,var(--warning) 26%,transparent)}
+.badge--danger{background:var(--danger-bg);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 24%,transparent)}
+.badge--muted{background:var(--chip);color:var(--text-secondary);border-color:var(--border)}
+.badge--primary{background:var(--primary-bg);color:var(--primary);border-color:var(--primary-border)}
+.badge--success,.badge--warning,.badge--danger,.badge--primary{background-image:linear-gradient(180deg,rgba(255,255,255,0.3),rgba(255,255,255,0))}
+html.dark .badge--success,html.dark .badge--warning,html.dark .badge--danger,html.dark .badge--primary{background-image:linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0))}
+
+/* Point « en direct » qui pulse */
+.ico-dot{display:inline-block;width:0.6em;height:0.6em;border-radius:50%;background:var(--success);color:var(--success);vertical-align:0.05em;animation:dotPulse 2s ease-in-out infinite}
+
+/* Pilule « Live » (barre du haut) */
+.live-pill{
+  display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:999px;
+  font-size:0.74rem;font-weight:700;letter-spacing:0.02em;white-space:nowrap;
+  color:var(--success);background:var(--success-bg);border:1px solid color-mix(in srgb,var(--success) 28%,transparent)
+}
+.live-pill__dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:dotPulse 2s ease-in-out infinite}
+.live-pill.is-off{color:var(--muted);background:var(--chip);border-color:var(--border)}
+.live-pill.is-off .live-pill__dot{animation:none}

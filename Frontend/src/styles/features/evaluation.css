@@ -1,3 +1,6 @@
+/* =====================================================================
+   Nouvelle évaluation / fiche d'évaluation (pages/shared/NewEvaluationPage.jsx)
+   ===================================================================== */
 /* New Evaluation Page */
 .nep__header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}
 .nep__title{font-size:1.55rem;font-weight:800;letter-spacing:-0.035em}
@@ -134,3 +137,6 @@
   font-size: 0.85rem;
   line-height: 1.4;
 }
+
+.nep__locked,.nep__locked:focus{background:var(--chip)!important;color:var(--text-secondary);cursor:not-allowed;box-shadow:none!important;border-color:var(--border)!important}
+.nep__fieldErr{color:var(--danger);font-size:.75rem;margin-top:4px;font-weight:600}
