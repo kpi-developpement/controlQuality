@@ -27,6 +27,10 @@ export default function TrainingPage() {
   const [form, setForm] = useState({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "", fileUrl: "", fileName: "", fileType: "", timeLimitMinutes: 0 });
   const [pdfFile, setPdfFile] = useState(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  // État du dépôt affiché DANS la fenêtre de création (les messages de page restent masqués par la fenêtre)
+  const [docStatus, setDocStatus] = useState(null); // { kind: "progress"|"ok"|"warn"|"error", text, pct }
+  const [videoStatus, setVideoStatus] = useState(null);
   // Délai de passation : échéance et temps restant
   const [deadline, setDeadline] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -110,33 +114,44 @@ export default function TrainingPage() {
 
   async function uploadDoc(file) {
     if (!file) return;
+    if (!/\.(pdf|ppt|pptx|pps|ppsx)$/i.test(file.name)) { setDocStatus({ kind: "error", text: "Format non supporté : choisissez un fichier PDF ou PowerPoint (.ppt, .pptx, .pps, .ppsx)." }); return; }
     setMsg(""); setErr(""); setUploadingDoc(true);
+    const isPpt = !/\.pdf$/i.test(file.name);
+    setDocStatus({ kind: "progress", text: `Envoi de ${file.name}…`, pct: 0 });
     const fd = new FormData(); fd.append("file", file);
     try {
-      const r = await api.post("/training/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const r = await api.post("/training/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" }, toast: false,
+        onUploadProgress: (ev) => {
+          const pct = ev.total ? Math.round((ev.loaded / ev.total) * 100) : 0;
+          setDocStatus({ kind: "progress", pct, text: pct < 100 ? `Envoi de ${file.name}… ${pct} %` : isPpt ? "Conversion du PowerPoint pour l'affichage… (jusqu'à 1 minute)" : "Enregistrement…" });
+        },
+      });
       const d = r.data || {};
-      if (d.fileType === "video") { setErr("Déposez la vidéo dans le champ « Vidéo »."); return; }
+      if (d.fileType === "video") { setDocStatus({ kind: "error", text: "Déposez la vidéo dans le champ « Vidéo »." }); return; }
       setPdfFile(null);
       setForm((f) => ({ ...f, fileUrl: d.url || "", fileName: d.filename || file.name, fileType: d.fileType || "", pdfUrl: d.viewUrl || "" }));
-      if (d.fileType === "ppt" && !d.converted) setMsg("PowerPoint déposé. La conversion pour l'affichage n'est pas disponible sur ce serveur : le fichier sera proposé au téléchargement.");
-      else setMsg(`${d.fileType === "ppt" ? "PowerPoint" : "PDF"} déposé (${(file.size / 1024 / 1024).toFixed(1)} MB) — consultable dans l'application.`);
-    } catch (ex) { setErr(ex?.response?.data?.message || "Erreur lors du dépôt du fichier."); }
-    finally { setUploadingDoc(false); }
+      if (d.fileType === "ppt" && !d.converted) setDocStatus({ kind: "warn", text: "PowerPoint déposé, mais la conversion pour l'affichage a échoué sur le serveur : il sera proposé au téléchargement." });
+      else setDocStatus({ kind: "ok", text: `${d.fileType === "ppt" ? "PowerPoint" : "PDF"} déposé (${(file.size / 1024 / 1024).toFixed(1)} MB) — consultable dans l'application.` });
+    } catch (ex) {
+      setDocStatus({ kind: "error", text: ex?.response?.data?.message || "Échec du dépôt du fichier. Réessayez." });
+    } finally { setUploadingDoc(false); }
   }
+
 
   async function loadResults(id) {
     try { setResults((await api.get(`/training/${id}/results`)).data); setResultsFor(id); } catch {}
   }
 
   // Form helpers
-  function resetForm() { setForm({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "", fileUrl: "", fileName: "", fileType: "", timeLimitMinutes: 0 }); setPdfFile(null); }
+  function resetForm() { setForm({ title: "", description: "", pdfUrl: "", videoUrl: "", category: "", roles: [], targetCells: [], targetUsers: [], questions: [], allowMultipleAttempts: true, passThreshold: 80, dueDate: "", fileUrl: "", fileName: "", fileType: "", timeLimitMinutes: 0 }); setPdfFile(null); setDocStatus(null); setVideoStatus(null); }
   function openCreate(kind = "formation") {
     resetForm(); setEditing(null); setCreating(true); setMsg(""); setErr("");
     if (kind === "quiz") setForm((f) => ({ ...f, questions: [{ _lid: uid(), question: "", imageData: "", options: ["", ""], correctIndex: 0 }] }));
   }
   function openEdit(t) {
     setForm({ title: t.title || "", description: t.description || "", pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "", category: t.category || "", roles: t.roles || [], targetCells: t.targetCells || [], targetUsers: (t.targetUsers || []).map((u) => typeof u === "string" ? u : u._id || u), questions: (t.questions || []).map((q) => ({ ...q, _lid: uid() })), allowMultipleAttempts: t.allowMultipleAttempts !== false, passThreshold: Number.isFinite(t.passThreshold) ? t.passThreshold : 80, dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : "", fileUrl: t.fileUrl || "", fileName: t.fileName || "", fileType: t.fileType || "", timeLimitMinutes: Number(t.timeLimitMinutes) || 0 });
-    setEditing(t); setCreating(true); setMsg(""); setErr("");
+    setEditing(t); setCreating(true); setMsg(""); setErr(""); setDocStatus(null); setVideoStatus(null);
   }
 
   async function handleSave() {
@@ -455,7 +470,7 @@ export default function TrainingPage() {
                 <div>
                   <div className="label" style={{ marginBottom: 4 }}>Support PDF ou PowerPoint</div>
                   <input type="file" accept=".pdf,.ppt,.pptx,.pps,.ppsx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" disabled={uploadingDoc} onChange={(e) => uploadDoc(e.target.files?.[0])} style={{ fontSize: "0.85rem" }} />
-                  <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 4 }}>{uploadingDoc ? "Dépôt et conversion en cours…" : "Visualisé directement dans l'application (PowerPoint converti en PDF)."}</div>
+                  {docStatus ? <UploadStatus s={docStatus} /> : <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 4 }}>PDF ou PowerPoint (.ppt, .pptx), visualisé directement dans l'application.</div>}
                   {form.fileUrl && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}><span className="badge badge--success" style={{ fontSize: "0.72rem" }}><Ico n="checkCircle" /> {form.fileName || "Fichier déposé"}</span><button type="button" className="btn btn--ghost btn--sm" aria-label="Retirer le fichier" onClick={() => setForm((f) => ({ ...f, fileUrl: "", fileName: "", fileType: "", pdfUrl: "" }))}><Ico n="x" /></button></div>}
                 </div>
                 <div><div className="label" style={{ marginBottom: 4 }}>ou URL d'un PDF</div><input className="input" value={form.fileUrl ? "" : form.pdfUrl} disabled={!!form.fileUrl} onChange={(e) => setForm((f) => ({ ...f, pdfUrl: e.target.value }))} placeholder="https://…" /></div>
@@ -467,16 +482,22 @@ export default function TrainingPage() {
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                       <input type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
-                        setMsg(""); setErr("");
+                        setMsg(""); setErr(""); setUploadingVideo(true);
+                        setVideoStatus({ kind: "progress", pct: 0, text: `Envoi de ${file.name}…` });
                         const fd = new FormData(); fd.append("file", file);
                         try {
-                          const r = await api.post("/training/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                          const r = await api.post("/training/upload", fd, {
+                            headers: { "Content-Type": "multipart/form-data" }, toast: false,
+                            onUploadProgress: (ev) => { const pct = ev.total ? Math.round((ev.loaded / ev.total) * 100) : 0; setVideoStatus({ kind: "progress", pct, text: `Envoi de ${file.name}… ${pct} %` }); },
+                          });
                           const url = r.data?.url || "";
                           setForm((f) => ({ ...f, videoUrl: url }));
-                          setMsg(`Vidéo uploadée (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
-                        } catch (ex) { setErr(ex?.response?.data?.message || "Erreur upload vidéo."); }
-                      }} style={{ fontSize: "0.85rem" }} />
+                          setVideoStatus({ kind: "ok", text: `Vidéo déposée (${(file.size / 1024 / 1024).toFixed(1)} MB).` });
+                        } catch (ex) { setVideoStatus({ kind: "error", text: ex?.response?.data?.message || "Échec du dépôt de la vidéo." }); }
+                        finally { setUploadingVideo(false); }
+                      }} disabled={uploadingVideo} style={{ fontSize: "0.85rem" }} />
                     </div>
+                    {videoStatus && <div style={{ marginBottom: 6 }}><UploadStatus s={videoStatus} /></div>}
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>ou URL :</span>
                       <input className="input" value={form.videoUrl} onChange={(e) => setForm((f) => ({ ...f, videoUrl: e.target.value }))} placeholder="https://youtube.com/… ou lien direct" style={{ flex: 1, fontSize: "0.85rem" }} />
@@ -606,9 +627,24 @@ export default function TrainingPage() {
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button className="btn btn--ghost" onClick={() => setCreating(false)}>Annuler</button>
-              <button className="btn" onClick={handleSave} disabled={saving}>{saving ? "Sauvegarde…" : editing ? "Enregistrer" : "Créer"}</button>
+              <button className="btn" onClick={handleSave} disabled={saving || uploadingDoc || uploadingVideo} title={uploadingDoc || uploadingVideo ? "Patientez : dépôt du fichier en cours" : undefined}>{saving ? "Sauvegarde…" : uploadingDoc || uploadingVideo ? "Dépôt en cours…" : editing ? "Enregistrer" : "Créer"}</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Ligne d'état d'un dépôt de fichier (progression, succès, avertissement, erreur). */
+function UploadStatus({ s }) {
+  const color = { ok: "var(--success)", warn: "var(--warning)", error: "var(--danger)" }[s.kind] || "var(--muted)";
+  return (
+    <div role={s.kind === "error" ? "alert" : "status"} style={{ marginTop: 6, fontSize: "0.78rem", fontWeight: 600, color }}>
+      {s.text}
+      {s.kind === "progress" && (
+        <div style={{ height: 4, borderRadius: 4, background: "var(--chip)", marginTop: 4, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${Math.max(5, s.pct || 0)}%`, background: "var(--primary)", transition: "width 200ms" }} />
         </div>
       )}
     </div>

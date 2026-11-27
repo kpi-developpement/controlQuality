@@ -17,6 +17,8 @@ import { ThemeProvider } from "./theme/theme.js";
 import { ToastProvider } from "./toast/ToastProvider.jsx";
 import AppShell from "./components/AppShell.jsx";
 import { resetSocketAuth } from "./socket.js";
+import api from "./api";
+import { toast } from "./toast/toastBus";
 import {
   FiBarChart2,
   FiList,
@@ -51,7 +53,18 @@ function App() {
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+      // Vérifie la session enregistrée (expirée ou à renouveler → écran de connexion)
+      api.get("/auth/ping", { toast: false }).catch(() => {});
+    }
+    // Un seul évènement par session (le jeton est effacé au premier refus)
+    const onExpired = (ev) => {
+      toast.info(ev?.detail?.message || "Session expirée : merci de vous reconnecter.", { durationMs: 5000 });
+      setUser(null);
+    };
+    window.addEventListener("kcq:session-expired", onExpired);
+    return () => window.removeEventListener("kcq:session-expired", onExpired);
   }, []);
 
   useEffect(() => {

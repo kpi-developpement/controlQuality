@@ -51,11 +51,16 @@ api.interceptors.response.use(
     }
 
     if (status === 401) {
+      const isAuthRoute = url.includes("/auth/login") || url.includes("/auth/ping");
+      const hadSession = !!localStorage.getItem("token");
       // always clear stored auth (existing behavior)
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      // Retour à l'écran de connexion (session expirée ou à renouveler)
+      if (hadSession && !url.includes("/auth/login")) {
+        try { window.dispatchEvent(new CustomEvent("kcq:session-expired", { detail: { message: err.response?.data?.message || "" } })); } catch { /* navigateur ancien */ }
+      }
 
-      const isAuthRoute = url.includes("/auth/login") || url.includes("/auth/ping");
 
       // Only redirect on non-GET requests (user-triggered actions),
       // and avoid redirect loops on auth endpoints.

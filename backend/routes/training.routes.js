@@ -89,9 +89,14 @@ function convertToPdf(filePath) {
   return new Promise((resolve) => {
     const tryBin = (i) => {
       if (i >= bins.length) return resolve("");
-      execFile(bins[i], ["--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, filePath], { timeout: 180000 }, (err) => {
+      // Profil LibreOffice dédié à chaque conversion : évite les blocages (profil verrouillé, première exécution)
+      const profile = path.join(require("os").tmpdir(), `kcq-lo-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const args = [`-env:UserInstallation=file://${profile}`, "--headless", "--norestore", "--nologo", "--convert-to", "pdf", "--outdir", dir, filePath];
+      execFile(bins[i], args, { timeout: 180000, env: { ...process.env, HOME: process.env.HOME || require("os").tmpdir() } }, (err, stdout, stderr) => {
+        require("fs").rm(profile, { recursive: true, force: true }, () => {});
         const out = path.join(dir, `${path.basename(filePath, path.extname(filePath))}.pdf`);
         if (!err && require("fs").existsSync(out)) return resolve(out);
+        if (err && err.code !== "ENOENT") console.error(`Conversion PowerPoint (${bins[i]}) échouée :`, err.message, String(stderr || "").slice(0, 500));
         tryBin(i + 1);
       });
     };
@@ -100,13 +105,25 @@ function convertToPdf(filePath) {
 }
 
 /** POST /training/upload — Dépôt d'une vidéo, d'un PDF ou d'un PowerPoint */
-router.post("/upload", permit("admin", "formateur"), upload.single("file"), async (req, res) => {
+// Erreurs de dépôt (format, taille) renvoyées en JSON lisible par l'interface
+function uploadSingle(req, res, next) {
+  upload.single("file")(req, res, (err) => {
+    if (!err) return next();
+    const tooBig = err.code === "LIMIT_FILE_SIZE";
+    return res.status(400).json({ message: tooBig ? "Fichier trop volumineux (500 Mo maximum)." : err.message === "Format non supporté." ? "Format non supporté : PDF, PowerPoint (.ppt, .pptx, .pps, .ppsx) ou vidéo (.mp4, .webm, .mov)." : `Dépôt impossible : ${err.message}` });
+  });
+}
+
+router.post("/upload", permit("admin", "formateur"), uploadSingle, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Aucun fichier." });
     const url = `/uploads/training/${req.file.filename}`;
     const ext = path.extname(req.file.originalname).toLowerCase();
     const fileType = ext === ".pdf" ? "pdf" : /^\.pp[st]x?$/.test(ext) ? "ppt" : "video";
-    const out = { url, filename: req.file.originalname, size: req.file.size, fileType };
+    // Nom d'origine : multer le décode en latin1 (accents « Présentation » mal affichés sinon)
+    let original = req.file.originalname;
+    try { const utf = Buffer.from(original, "latin1").toString("utf8"); if (!utf.includes("\uFFFD")) original = utf; } catch { /* nom laissé tel quel */ }
+    const out = { url, filename: original, size: req.file.size, fileType };
     if (fileType === "ppt") {
       const pdf = await convertToPdf(req.file.path);
       out.viewUrl = pdf ? `/uploads/training/${path.basename(pdf)}` : "";

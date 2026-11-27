@@ -8,6 +8,7 @@ const LoginEvent = require("../models/LoginEvent");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SECRET;
+const { SESSION_VERSION } = require("../middleware/auth");
 
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
@@ -49,6 +50,8 @@ router.post("/login", async (req, res) => {
         id: user._id,
         role: user.role, // "admin", "cq", "pilote", "management"
         name: user.name,
+        // Version de session : les sessions ouvertes avant le coffre des mots de passe sont renouvelées
+        pv: SESSION_VERSION,
       },
       JWT_SECRET,
       { expiresIn: "8h" }
